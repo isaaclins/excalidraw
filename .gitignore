@@ -1,0 +1,10 @@
+node_modules
+app/node_modules
+app/dist
+app/.DS_Store
+.DS_Store
+app/src-tauri/target
+app/src-tauri/.fingerprint
+app/src-tauri/Cargo.lock
+app/src-tauri/.cargo
+*.log

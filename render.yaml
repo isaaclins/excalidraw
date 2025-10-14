@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: excalidraw-server
+    env: docker
+    rootDir: server
+    plan: starter
+    autoDeploy: true
+    envVars:
+      - key: PORT
+        value: 3000
+      - key: STORAGE_TYPE
+        value: filesystem
+      - key: STORAGE_PATH
+        value: /data
+    disk:
+      name: data
+      mountPath: /data
+      sizeGB: 1
