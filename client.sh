@@ -7,4 +7,4 @@
 
 set -euo pipefail
 
-cd excaliapp && pnpm tauri dev
+cd excaliapp && pnpm i && pnpm tauri dev
