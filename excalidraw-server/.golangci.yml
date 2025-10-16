@@ -40,9 +40,9 @@ issues:
       linters:
         - goconst
         - errcheck
+  exclude-dirs:
+    - vendor
+    - target
 
 run:
   timeout: 5m
-  skip-dirs:
-    - vendor
-    - target
