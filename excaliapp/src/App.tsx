@@ -1,5 +1,6 @@
 import "./App.css";
 import { Excalidraw } from "@excalidraw/excalidraw";
+import "@excalidraw/excalidraw/index.css";
 
 function App() {
   return (
