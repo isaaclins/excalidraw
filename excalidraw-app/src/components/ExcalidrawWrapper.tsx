@@ -1,14 +1,16 @@
-import { Excalidraw } from '@excalidraw/excalidraw';
+import { Excalidraw, MainMenu } from '@excalidraw/excalidraw';
 import { ExcalidrawImperativeAPI } from '@excalidraw/excalidraw/types/types';
 import { useEffect, useRef, useState } from 'react';
 import { ExcalidrawAPI, ServerConfig } from '../lib/api';
 import { localStorage as localStorageAPI } from '../lib/storage';
 import '@excalidraw/excalidraw/index.css';
+
 interface ExcalidrawWrapperProps {
   serverConfig: ServerConfig;
+  onOpenSettings: () => void;
 }
 
-export function ExcalidrawWrapper({ serverConfig }: ExcalidrawWrapperProps) {
+export function ExcalidrawWrapper({ serverConfig, onOpenSettings }: ExcalidrawWrapperProps) {
   const excalidrawRef = useRef<ExcalidrawImperativeAPI>(null);
   const [api, setApi] = useState<ExcalidrawAPI | null>(null);
   const [currentDrawingId, setCurrentDrawingId] = useState<string | null>(null);
@@ -103,7 +105,21 @@ export function ExcalidrawWrapper({ serverConfig }: ExcalidrawWrapperProps) {
         ref={excalidrawRef}
         onChange={handleChange}
         theme="light"
-      />
+      >
+        <MainMenu>
+          <MainMenu.DefaultItems.LoadScene />
+          <MainMenu.DefaultItems.SaveToActiveFile />
+          <MainMenu.DefaultItems.Export />
+          <MainMenu.DefaultItems.SaveAsImage />
+          <MainMenu.Separator />
+          <MainMenu.Item onSelect={onOpenSettings}>
+            🔌 Server Settings
+          </MainMenu.Item>
+          <MainMenu.Separator />
+          <MainMenu.DefaultItems.Help />
+          <MainMenu.DefaultItems.ClearCanvas />
+        </MainMenu>
+      </Excalidraw>
     </div>
   );
 }
