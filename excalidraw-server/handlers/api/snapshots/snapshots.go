@@ -1,6 +1,7 @@
 package snapshots
 
 import (
+	"context"
 	"encoding/json"
 	"excalidraw-server/stores/sqlite"
 	"io"
@@ -36,13 +37,13 @@ type (
 	}
 
 	SnapshotStore interface {
-		CreateSnapshot(ctx interface{}, roomID, name, description, thumbnail, createdBy string, data []byte) (string, error)
-		ListSnapshots(ctx interface{}, roomID string) ([]sqlite.Snapshot, error)
-		GetSnapshot(ctx interface{}, id string) (*sqlite.Snapshot, error)
-		DeleteSnapshot(ctx interface{}, id string) error
-		UpdateSnapshotMetadata(ctx interface{}, id, name, description string) error
-		GetRoomSettings(ctx interface{}, roomID string) (*sqlite.RoomSettings, error)
-		UpdateRoomSettings(ctx interface{}, roomID string, maxSnapshots, autoSaveInterval int) error
+		CreateSnapshot(ctx context.Context, roomID, name, description, thumbnail, createdBy string, data []byte) (string, error)
+		ListSnapshots(ctx context.Context, roomID string) ([]sqlite.Snapshot, error)
+		GetSnapshot(ctx context.Context, id string) (*sqlite.Snapshot, error)
+		DeleteSnapshot(ctx context.Context, id string) error
+		UpdateSnapshotMetadata(ctx context.Context, id, name, description string) error
+		GetRoomSettings(ctx context.Context, roomID string) (*sqlite.RoomSettings, error)
+		UpdateRoomSettings(ctx context.Context, roomID string, maxSnapshots, autoSaveInterval int) error
 	}
 )
 
