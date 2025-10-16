@@ -37,10 +37,23 @@ echo "   Data Source: $DATA_SOURCE_NAME"
 echo "   Log Level: $LOG_LEVEL"
 echo ""
 
+# Clean previous build
+if [ -f "excalidraw-server" ]; then
+    echo "🧹 Cleaning previous build..."
+    rm excalidraw-server
+fi
+
 # Build and run
 echo "🔨 Building server..."
 go build -o excalidraw-server .
 
+if [ ! -f "excalidraw-server" ]; then
+    echo "❌ Build failed!"
+    exit 1
+fi
+
+echo "✓ Build successful"
+echo ""
 echo "▶️  Starting server on :3002..."
 echo "   Press Ctrl+C to stop"
 echo ""
