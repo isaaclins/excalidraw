@@ -11,10 +11,9 @@ export interface AutoSnapshotConfig {
 
 export class AutoSnapshotManager {
   private config: AutoSnapshotConfig;
-  private intervalId: NodeJS.Timeout | null = null;
+  private intervalId: number | null = null;
   private changeCount = 0;
   private lastSaveTime = 0;
-  private significantChangeThreshold = 10;
 
   constructor(config: AutoSnapshotConfig) {
     this.config = config;
