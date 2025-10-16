@@ -72,8 +72,14 @@ React component testing:
 ### 4. GitHub Actions CI Workflow
 
 - ✅ `.github/workflows/ci.yml` updated
-- Runs client and server tests on separate machines
-- Node.js 20 setup with npm caching
+- **Server Pipeline:** Lint → Test → Build (Go binary for Linux)
+- **Client Pipeline:** Lint → Test → Build (matrix: Linux, macOS, Windows)
+- Builds actual Tauri desktop executables:
+  - Linux: .deb, .AppImage
+  - macOS: .dmg, .app
+  - Windows: .msi, .exe
+- Parallel execution across 4 jobs
+- Platform-specific dependency installation
 - Triggers on push and pull requests to main
 
 ## Test Philosophy

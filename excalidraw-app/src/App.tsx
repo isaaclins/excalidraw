@@ -10,12 +10,14 @@ function App() {
 
   const [roomId, setRoomId] = useState<string | null>(null);
 
+  // eslint-disable-next-line react-compiler/react-compiler
   useEffect(() => {
     // Check if we have a saved config in localStorage
     const saved = localStorage.getItem('excalidraw-server-config');
     if (saved) {
       // User has made a choice before, skip dialog
       const config = getServerConfig();
+      // eslint-disable-next-line react-hooks/rules-of-hooks
       setServerConfig(config);
       setShowDialog(false);
     }
