@@ -70,7 +70,10 @@ export class LocalStorage {
   }
 
   async loadSnapshot(id: string): Promise<Snapshot> {
-    return invoke<Snapshot>('load_snapshot', { id });
+    console.log(`Loading snapshot ${id} from local storage...`);
+    const snapshot = await invoke<Snapshot>('load_snapshot', { id });
+    console.log('Snapshot loaded from local storage:', snapshot);
+    return snapshot;
   }
 
   async deleteSnapshot(id: string): Promise<void> {
@@ -166,13 +169,18 @@ export class ServerStorage {
   }
 
   async loadSnapshot(id: string): Promise<Snapshot> {
+    console.log(`Loading snapshot ${id} from server...`);
     const response = await fetch(`${this.serverUrl}/api/snapshots/${id}`);
 
     if (!response.ok) {
-      throw new Error('Failed to load snapshot from server');
+      const errorText = await response.text();
+      console.error(`Server returned ${response.status}:`, errorText);
+      throw new Error(`Failed to load snapshot from server (${response.status}): ${errorText}`);
     }
 
-    return response.json();
+    const snapshot = await response.json();
+    console.log('Snapshot loaded from server:', snapshot);
+    return snapshot;
   }
 
   async deleteSnapshot(id: string): Promise<void> {

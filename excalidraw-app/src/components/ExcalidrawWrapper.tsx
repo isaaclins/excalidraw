@@ -34,6 +34,9 @@ export function ExcalidrawWrapper({ serverConfig, onOpenSettings, onRoomIdChange
   const broadcastedElementVersions = useRef<Map<string, number>>(new Map());
   const autoSnapshotManager = useRef<AutoSnapshotManager | null>(null);
   const [snapshotStorage, setSnapshotStorage] = useState<typeof localStorageAPI | ServerStorage>(localStorageAPI);
+  const lastBroadcastTime = useRef<number>(0);
+  const broadcastThrottleMs = 50; // Throttle broadcasts to max 20 per second
+  const isApplyingRemoteUpdate = useRef<boolean>(false);
 
   useEffect(() => {
     const excalidrawAPI = new ExcalidrawAPI(serverConfig);
@@ -179,12 +182,18 @@ export function ExcalidrawWrapper({ serverConfig, onOpenSettings, onRoomIdChange
           appState
         );
         
-        // Update the scene version BEFORE updating scene to prevent re-broadcasting
-        lastBroadcastedOrReceivedSceneVersion.current = getSceneVersion(reconciledElements);
+        // Set flag to prevent re-broadcasting this update
+        isApplyingRemoteUpdate.current = true;
         
+        // Update scene
         excalidrawRef.current.updateScene({
           elements: reconciledElements,
         });
+        
+        // Clear flag after a short delay to allow onChange to process
+        setTimeout(() => {
+          isApplyingRemoteUpdate.current = false;
+        }, 100);
         
         console.log('Scene reconciled and updated');
       }
@@ -312,12 +321,21 @@ export function ExcalidrawWrapper({ serverConfig, onOpenSettings, onRoomIdChange
 
     // Broadcast changes if collaboration is enabled
     if (api?.isEnabled() && api.getCollaborationClient()?.isConnected()) {
+      // Don't broadcast if we're applying a remote update
+      if (isApplyingRemoteUpdate.current) {
+        return;
+      }
+
       const currentVersion = getSceneVersion(elements);
+      const now = Date.now();
       
-      // Only broadcast if this is a new version (not something we just received)
-      if (currentVersion > lastBroadcastedOrReceivedSceneVersion.current) {
+      // Only broadcast if this is a new version
+      // AND we haven't broadcast too recently (throttle)
+      if (currentVersion > lastBroadcastedOrReceivedSceneVersion.current &&
+          (now - lastBroadcastTime.current) >= broadcastThrottleMs) {
         broadcastScene(api.getCollaborationClient(), elements, false);
         lastBroadcastedOrReceivedSceneVersion.current = currentVersion;
+        lastBroadcastTime.current = now;
       }
     }
   };
@@ -365,18 +383,35 @@ export function ExcalidrawWrapper({ serverConfig, onOpenSettings, onRoomIdChange
   };
 
   const handleLoadSnapshot = (snapshot: Snapshot) => {
-    if (!excalidrawRef.current || !snapshot.data) return;
+    if (!excalidrawRef.current) {
+      alert('Excalidraw not ready');
+      return;
+    }
+
+    if (!snapshot.data) {
+      console.error('Snapshot data is missing:', snapshot);
+      alert('Snapshot data is missing');
+      return;
+    }
 
     try {
+      console.log('Loading snapshot:', snapshot.id);
       const sceneData = JSON.parse(snapshot.data);
+      
+      if (!sceneData.elements || !Array.isArray(sceneData.elements)) {
+        console.error('Invalid snapshot data structure:', sceneData);
+        alert('Invalid snapshot data structure');
+        return;
+      }
+
       excalidrawRef.current.updateScene({
         elements: sceneData.elements,
-        appState: sceneData.appState,
+        appState: sceneData.appState || {},
       });
       console.log('Snapshot loaded successfully');
     } catch (error) {
       console.error('Failed to load snapshot:', error);
-      alert('Failed to load snapshot');
+      alert(`Failed to load snapshot: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   };
 
