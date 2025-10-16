@@ -1,0 +1,4 @@
+dist/
+frontend/
+!frontend/.keep
+excalidraw-complete

@@ -20,8 +20,9 @@ function App() {
       setShowDialog(false);
     }
 
-    // Add keyboard shortcut to open connection dialog (Cmd/Ctrl + K)
+    // Add keyboard shortcuts
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Cmd/Ctrl + K to open connection dialog
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
         e.preventDefault();
         setShowDialog(true);

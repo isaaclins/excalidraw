@@ -1,9 +1,11 @@
-import { Excalidraw, MainMenu } from '@excalidraw/excalidraw';
+import { Excalidraw, MainMenu, exportToBlob } from '@excalidraw/excalidraw';
 import type { ExcalidrawImperativeAPI } from '@excalidraw/excalidraw/types';
 import { useEffect, useRef, useState } from 'react';
 import { ExcalidrawAPI, ServerConfig } from '../lib/api';
-import { localStorage as localStorageAPI } from '../lib/storage';
+import { localStorage as localStorageAPI, ServerStorage, Snapshot } from '../lib/storage';
 import { RoomsSidebar } from './RoomsSidebar';
+import { SnapshotsSidebar } from './SnapshotsSidebar';
+import { AutoSnapshotManager } from '../lib/autoSnapshot';
 import { reconcileElements, BroadcastedExcalidrawElement } from '../lib/reconciliation';
 import '@excalidraw/excalidraw/index.css';
 
@@ -25,14 +27,23 @@ export function ExcalidrawWrapper({ serverConfig, onOpenSettings, onRoomIdChange
   const [api, setApi] = useState<ExcalidrawAPI | null>(null);
   const [currentDrawingId, setCurrentDrawingId] = useState<string | null>(null);
   const [showRoomsSidebar, setShowRoomsSidebar] = useState(false);
+  const [showSnapshotsSidebar, setShowSnapshotsSidebar] = useState(false);
   const [currentRoomId, setCurrentRoomId] = useState<string | null>(initialRoomId);
   const saveTimeoutRef = useRef<number | undefined>(undefined);
   const lastBroadcastedOrReceivedSceneVersion = useRef<number>(-1);
   const broadcastedElementVersions = useRef<Map<string, number>>(new Map());
+  const autoSnapshotManager = useRef<AutoSnapshotManager | null>(null);
+  const [snapshotStorage, setSnapshotStorage] = useState<typeof localStorageAPI | ServerStorage>(localStorageAPI);
 
   useEffect(() => {
     const excalidrawAPI = new ExcalidrawAPI(serverConfig);
     setApi(excalidrawAPI);
+
+    // Set up snapshot storage based on server config
+    const storage = serverConfig.enabled 
+      ? new ServerStorage(serverConfig.url)
+      : localStorageAPI;
+    setSnapshotStorage(storage);
 
     // If server is enabled and we have a room ID, connect
     if (serverConfig.enabled && initialRoomId) {
@@ -60,6 +71,13 @@ export function ExcalidrawWrapper({ serverConfig, onOpenSettings, onRoomIdChange
         console.error('Failed to connect to collaboration:', error);
         alert('Failed to connect to collaboration server. Working in local mode.');
       });
+    } else if (!serverConfig.enabled) {
+      // Generate local room ID for offline mode (for snapshots)
+      const localRoomId = initialRoomId || generateRoomId();
+      setCurrentRoomId(localRoomId);
+      if (!initialRoomId) {
+        onRoomIdChange(localRoomId);
+      }
     }
     
     // Update current room ID when initialRoomId changes
@@ -69,8 +87,83 @@ export function ExcalidrawWrapper({ serverConfig, onOpenSettings, onRoomIdChange
 
     return () => {
       excalidrawAPI.disconnect();
+      if (autoSnapshotManager.current) {
+        autoSnapshotManager.current.stop();
+      }
     };
   }, [serverConfig, initialRoomId]);
+
+  // Initialize auto-snapshot manager when room is ready
+  useEffect(() => {
+    if (!currentRoomId || autoSnapshotManager.current) return;
+
+    const initAutoSnapshot = async () => {
+      try {
+        const settings = await snapshotStorage.getRoomSettings(currentRoomId);
+        
+        autoSnapshotManager.current = new AutoSnapshotManager({
+          roomId: currentRoomId,
+          enabled: true,
+          settings,
+          onSave: async (roomId, data, thumbnail) => {
+            await snapshotStorage.saveSnapshot(
+              roomId,
+              data,
+              `Auto-save ${new Date().toLocaleString()}`,
+              'Automatic snapshot',
+              thumbnail
+            );
+          },
+          getData: () => {
+            if (!excalidrawRef.current) return '';
+            const elements = excalidrawRef.current.getSceneElements();
+            const appState = excalidrawRef.current.getAppState();
+            return JSON.stringify({
+              elements,
+              appState: {
+                viewBackgroundColor: appState.viewBackgroundColor,
+                gridSize: appState.gridSize,
+              },
+            });
+          },
+          getThumbnail: async () => {
+            if (!excalidrawRef.current) return '';
+            try {
+              const elements = excalidrawRef.current.getSceneElements();
+              const appState = excalidrawRef.current.getAppState();
+              const blob = await exportToBlob({
+                elements,
+                appState,
+                files: null,
+                exportPadding: 10,
+              });
+              return new Promise<string>((resolve) => {
+                const reader = new FileReader();
+                reader.onloadend = () => resolve(reader.result as string);
+                reader.readAsDataURL(blob);
+              });
+            } catch (error) {
+              console.error('Failed to generate thumbnail:', error);
+              return '';
+            }
+          },
+        });
+
+        autoSnapshotManager.current.start();
+      } catch (error) {
+        console.error('Failed to initialize auto-snapshot:', error);
+      }
+    };
+
+    initAutoSnapshot();
+
+    return () => {
+      if (autoSnapshotManager.current) {
+        autoSnapshotManager.current.stop();
+        autoSnapshotManager.current = null;
+      }
+    };
+  }, [currentRoomId, snapshotStorage]);
 
   const setupCollaboration = (collab: any) => {
     collab.onBroadcast((data: any) => {
@@ -189,6 +282,11 @@ export function ExcalidrawWrapper({ serverConfig, onOpenSettings, onRoomIdChange
   };
 
   const handleChange = (elements: readonly any[], appState: any) => {
+    // Track changes for auto-snapshot
+    if (autoSnapshotManager.current) {
+      autoSnapshotManager.current.trackChange();
+    }
+
     // Auto-save locally
     if (saveTimeoutRef.current) {
       clearTimeout(saveTimeoutRef.current);
@@ -224,12 +322,88 @@ export function ExcalidrawWrapper({ serverConfig, onOpenSettings, onRoomIdChange
     }
   };
 
+  const handleSaveSnapshot = async () => {
+    if (!excalidrawRef.current || !currentRoomId) return;
+
+    try {
+      const elements = excalidrawRef.current.getSceneElements();
+      const appState = excalidrawRef.current.getAppState();
+      const data = JSON.stringify({
+        elements,
+        appState: {
+          viewBackgroundColor: appState.viewBackgroundColor,
+          gridSize: appState.gridSize,
+        },
+      });
+
+      const blob = await exportToBlob({
+        elements,
+        appState,
+        files: null,
+        exportPadding: 10,
+      });
+
+      const thumbnail = await new Promise<string>((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.readAsDataURL(blob);
+      });
+
+      await snapshotStorage.saveSnapshot(
+        currentRoomId,
+        data,
+        `Snapshot ${new Date().toLocaleString()}`,
+        'Manual snapshot',
+        thumbnail
+      );
+
+      console.log('Snapshot saved successfully');
+    } catch (error) {
+      console.error('Failed to save snapshot:', error);
+      throw error;
+    }
+  };
+
+  const handleLoadSnapshot = (snapshot: Snapshot) => {
+    if (!excalidrawRef.current || !snapshot.data) return;
+
+    try {
+      const sceneData = JSON.parse(snapshot.data);
+      excalidrawRef.current.updateScene({
+        elements: sceneData.elements,
+        appState: sceneData.appState,
+      });
+      console.log('Snapshot loaded successfully');
+    } catch (error) {
+      console.error('Failed to load snapshot:', error);
+      alert('Failed to load snapshot');
+    }
+  };
+
   return (
     <div style={{ height: '100vh', width: '100vw' }}>
       <Excalidraw
         excalidrawAPI={(api) => (excalidrawRef.current = api)}
         onChange={handleChange}
         theme="light"
+        initialData={{
+          elements: [],
+          appState: {
+            viewBackgroundColor: '#ffffff',
+            currentItemStrokeColor: '#000000',
+            currentItemBackgroundColor: 'transparent',
+            currentItemFillStyle: 'solid',
+            currentItemStrokeWidth: 2,
+            currentItemRoughness: 1,
+            currentItemOpacity: 100,
+            currentItemFontFamily: 1,
+            currentItemFontSize: 20,
+            currentItemTextAlign: 'left',
+            currentItemStrokeStyle: 'solid',
+            currentItemRoundness: 'sharp',
+          },
+          scrollToContent: true,
+        }}
       >
         <MainMenu>
           <MainMenu.DefaultItems.LoadScene />
@@ -237,6 +411,11 @@ export function ExcalidrawWrapper({ serverConfig, onOpenSettings, onRoomIdChange
           <MainMenu.DefaultItems.Export />
           <MainMenu.DefaultItems.SaveAsImage />
           <MainMenu.Separator />
+          {currentRoomId && (
+            <MainMenu.Item onSelect={() => setShowSnapshotsSidebar(true)}>
+              📸 Snapshots
+            </MainMenu.Item>
+          )}
           {serverConfig.enabled && currentRoomId && (
             <MainMenu.Item onSelect={() => setShowRoomsSidebar(true)}>
               🚪 Active Rooms
@@ -258,6 +437,17 @@ export function ExcalidrawWrapper({ serverConfig, onOpenSettings, onRoomIdChange
           onJoinRoom={handleJoinRoom}
           isVisible={showRoomsSidebar}
           onClose={() => setShowRoomsSidebar(false)}
+        />
+      )}
+      
+      {currentRoomId && (
+        <SnapshotsSidebar
+          roomId={currentRoomId}
+          storage={snapshotStorage}
+          isVisible={showSnapshotsSidebar}
+          onClose={() => setShowSnapshotsSidebar(false)}
+          onLoadSnapshot={handleLoadSnapshot}
+          onSaveSnapshot={handleSaveSnapshot}
         />
       )}
     </div>

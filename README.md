@@ -7,6 +7,7 @@ A self-hosted, privacy-focused Excalidraw setup with a Tauri desktop application
 - 🖥️ **Desktop App**: Native Tauri application for Windows, macOS, and Linux
 - 🔒 **Privacy First**: All data stored locally by default
 - 🤝 **Optional Collaboration**: Connect to your own server for real-time collaboration
+- 📸 **Room Snapshots**: Save and restore drawing states with thumbnails (manual + auto-save)
 - 💾 **Multiple Storage Options**: SQLite, filesystem, or in-memory storage
 - 🚀 **No Cloud Dependencies**: No Firebase, no external services
 - ⚡ **Fast & Lightweight**: Minimal server with WebSocket support
@@ -139,6 +140,20 @@ cd excalidraw-server
 go build -o excalidraw-server .
 ```
 
+## Room Snapshots
+
+The app includes a powerful snapshot feature for saving and restoring drawing states:
+
+- **📸 Manual Snapshots**: Save snapshots on demand via the menu
+- **⏰ Auto-Save**: Automatic snapshots at configurable intervals (default: 5 min)
+- **🖼️ Thumbnail Previews**: Visual preview of each snapshot
+- **🔧 Configurable**: Per-room settings for max snapshots and auto-save interval
+- **🌐 Smart Storage**: Server-side when connected, local when offline
+
+**Access snapshots**: Menu → 📸 Snapshots
+
+For detailed documentation, see [SNAPSHOTS_FEATURE.md](SNAPSHOTS_FEATURE.md).
+
 ## Architecture
 
 ### Desktop App (Tauri)
@@ -150,16 +165,18 @@ go build -o excalidraw-server .
   - Server connection dialog
   - WebSocket client for collaboration
   - Auto-save functionality
+  - Room snapshots with thumbnails
 
 ### Collaboration Server (Go)
 
 - **WebSocket**: Socket.IO for real-time collaboration
-- **REST API**: Simple save/load endpoints
+- **REST API**: Save/load endpoints + snapshot management
 - **Storage**: Pluggable backends (memory/filesystem/SQLite)
 - **Features**:
   - Room-based collaboration
   - User presence tracking
   - Document persistence
+  - Snapshot storage and retrieval
 
 ## License
 

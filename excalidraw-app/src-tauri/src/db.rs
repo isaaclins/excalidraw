@@ -13,6 +13,25 @@ pub struct Drawing {
     pub updated_at: i64,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Snapshot {
+    pub id: String,
+    pub room_id: String,
+    pub name: Option<String>,
+    pub description: Option<String>,
+    pub thumbnail: Option<String>,
+    pub created_by: Option<String>,
+    pub created_at: i64,
+    pub data: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct RoomSettings {
+    pub room_id: String,
+    pub max_snapshots: i32,
+    pub auto_save_interval: i32,
+}
+
 pub static DB: Lazy<Mutex<Connection>> = Lazy::new(|| {
     let conn = Connection::open(get_db_path()).expect("Failed to open database");
     init_db(&conn).expect("Failed to initialize database");
@@ -42,5 +61,29 @@ fn init_db(conn: &Connection) -> Result<()> {
         )",
         [],
     )?;
+    
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS snapshots (
+            id TEXT PRIMARY KEY,
+            room_id TEXT NOT NULL,
+            name TEXT,
+            description TEXT,
+            thumbnail TEXT,
+            created_by TEXT,
+            created_at INTEGER NOT NULL,
+            data TEXT NOT NULL
+        )",
+        [],
+    )?;
+    
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS room_settings (
+            room_id TEXT PRIMARY KEY,
+            max_snapshots INTEGER DEFAULT 10,
+            auto_save_interval INTEGER DEFAULT 300
+        )",
+        [],
+    )?;
+    
     Ok(())
 }

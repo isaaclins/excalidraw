@@ -14,6 +14,13 @@ pub fn run() {
             commands::load_drawing,
             commands::list_drawings,
             commands::delete_drawing,
+            commands::save_snapshot,
+            commands::list_snapshots,
+            commands::load_snapshot,
+            commands::delete_snapshot,
+            commands::update_snapshot_metadata,
+            commands::get_room_settings,
+            commands::update_room_settings,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

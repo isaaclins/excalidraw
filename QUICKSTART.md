@@ -116,7 +116,7 @@ npm run tauri dev
 │   │   │   ├── ConnectionDialog.css
 │   │   │   └── ExcalidrawWrapper.tsx
 │   │   ├── lib/
-│   │   │   ├── api.ts
+│   │   │   ├── api.ts![1760632999038](image/QUICKSTART/1760632999038.png)
 │   │   │   ├── storage.ts
 │   │   │   └── websocket.ts
 │   │   ├── App.tsx
