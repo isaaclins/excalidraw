@@ -1,7 +1,0 @@
-[submodule "cloudflare-worker"]
-	path = cloudflare-worker
-	url = https://github.com/betterandbetterii/cf-kv.git
-[submodule "excalidraw"]
-	path = excalidraw
-	url = git@github.com:BetterAndBetterII/excalidraw.git
-	branch = multi-canvas
