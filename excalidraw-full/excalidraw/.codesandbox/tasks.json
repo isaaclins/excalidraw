@@ -1,0 +1,50 @@
+{
+  // These tasks will run in order when initializing your CodeSandbox project.
+  "setupTasks": [
+    {
+      "name": "Install Dependencies",
+      "command": "pnpm install"
+    }
+  ],
+
+  // These tasks can be run from CodeSandbox. Running one will open a log in the app.
+  "tasks": {
+    "build": {
+      "name": "Build",
+      "command": "pnpm build",
+      "runAtStart": false
+    },
+    "fix": {
+      "name": "Fix",
+      "command": "pnpm fix",
+      "runAtStart": false
+    },
+    "prettier": {
+      "name": "Prettify",
+      "command": "pnpm prettier",
+      "runAtStart": false
+    },
+    "start": {
+      "name": "Start Excalidraw",
+      "command": "pnpm start",
+      "runAtStart": true,
+      "preview": {
+        "port": 3000
+      }
+    },
+    "test": {
+      "name": "Run Tests",
+      "command": "pnpm test",
+      "runAtStart": false
+    },
+    "install-deps": {
+      "name": "Install Dependencies",
+      "command": "pnpm install",
+      "restartOn": {
+        "files": ["pnpm.lock"],
+        "branch": false,
+        "resume": false
+      }
+    }
+  }
+}

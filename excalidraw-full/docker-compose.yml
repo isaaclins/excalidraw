@@ -1,0 +1,11 @@
+version: '3.8'
+
+services:
+  excalidraw:
+    image: ghcr.io/betterandbetterii/excalidraw-full:latest
+    ports:
+      - "3002:3002"
+    volumes:
+      - ./data:/root/data
+      - ./excalidraw.db:/root/excalidraw.db:Z
+      - ./.env:/root/.env
