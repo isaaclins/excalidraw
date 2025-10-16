@@ -52,7 +52,10 @@ export class CollaborationClient {
 
   onBroadcast(callback: (data: any) => void): void {
     if (!this.socket) return;
-    this.socket.on('client-broadcast', callback);
+    this.socket.on('client-broadcast', (data: any, metadata: any) => {
+      console.log('Received client-broadcast:', { data, metadata });
+      callback(data);
+    });
   }
 
   onRoomUserChange(callback: (users: string[]) => void): void {

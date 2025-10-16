@@ -8,6 +8,8 @@ function App() {
   const [showDialog, setShowDialog] = useState(true);
   const [serverConfig, setServerConfig] = useState<ServerConfig | null>(null);
 
+  const [roomId, setRoomId] = useState<string | null>(null);
+
   useEffect(() => {
     // Check if we have a saved config in localStorage
     const saved = localStorage.getItem('excalidraw-server-config');
@@ -30,13 +32,22 @@ function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  const handleConnect = (config: ServerConfig) => {
+  const handleConnect = (config: ServerConfig, newRoomId?: string) => {
     setServerConfig(config);
+    if (newRoomId) {
+      setRoomId(newRoomId);
+    }
     setShowDialog(false);
   };
 
   if (!serverConfig) {
-    return <ConnectionDialog onConnect={handleConnect} onClose={() => setShowDialog(false)} />;
+    return (
+      <ConnectionDialog 
+        onConnect={handleConnect} 
+        onClose={() => setShowDialog(false)}
+        isConnected={false}
+      />
+    );
   }
 
   return (
@@ -44,11 +55,15 @@ function App() {
       <ExcalidrawWrapper 
         serverConfig={serverConfig} 
         onOpenSettings={() => setShowDialog(true)}
+        onRoomIdChange={setRoomId}
+        initialRoomId={roomId}
       />
       {showDialog && (
         <ConnectionDialog 
           onConnect={handleConnect} 
-          onClose={() => setShowDialog(false)} 
+          onClose={() => setShowDialog(false)}
+          currentRoomId={roomId || undefined}
+          isConnected={serverConfig.enabled && !!roomId}
         />
       )}
     </>
