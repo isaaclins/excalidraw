@@ -14,14 +14,11 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-var savedDocuments = make(map[string]core.Document)
-
 type documentStore struct {
 	db *sql.DB
 }
 
 func NewDocumentStore(dataSourceName string) core.DocumentStore {
-	// db, err := sql.Open("sqlite3", ":memory:")
 	db, err := sql.Open("sqlite3", dataSourceName)
 
 	if err != nil {

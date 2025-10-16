@@ -43,6 +43,8 @@ func HandleGet(documentStore core.DocumentStore) http.HandlerFunc {
 			http.Error(w, "not found", http.StatusNotFound)
 			return
 		}
-		w.Write(document.Data.Bytes())
+		if _, err := w.Write(document.Data.Bytes()); err != nil {
+			http.Error(w, "failed to write response", http.StatusInternalServerError)
+		}
 	}
 }

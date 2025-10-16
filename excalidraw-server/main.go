@@ -44,7 +44,9 @@ func setupRouter(documentStore core.DocumentStore) *chi.Mux {
 	r.Get("/api/rooms", func(w http.ResponseWriter, r *http.Request) {
 		rooms := websocket.GetActiveRooms()
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(rooms)
+		if err := json.NewEncoder(w).Encode(rooms); err != nil {
+			http.Error(w, "failed to encode response", http.StatusInternalServerError)
+		}
 	})
 
 	// Snapshot API routes - only available with SQLite store
@@ -76,7 +78,7 @@ func setupRouter(documentStore core.DocumentStore) *chi.Mux {
 
 func waitForShutdown(ioo *socketio.Server) {
 	exit := make(chan struct{})
-	SignalC := make(chan os.Signal)
+	SignalC := make(chan os.Signal, 1)
 
 	signal.Notify(SignalC, os.Interrupt, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 	go func() {

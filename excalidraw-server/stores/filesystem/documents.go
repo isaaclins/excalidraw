@@ -18,7 +18,7 @@ type documentStore struct {
 }
 
 func NewDocumentStore(basePath string) core.DocumentStore {
-	if err := os.MkdirAll(basePath, 0755); err != nil {
+	if err := os.MkdirAll(basePath, 0o755); err != nil {
 		log.Fatalf("failed to create base directory: %v", err)
 	}
 
@@ -57,7 +57,7 @@ func (s *documentStore) Create(ctx context.Context, document *core.Document) (st
 	})
 	log.Info("Creating new document")
 
-	if err := os.WriteFile(filePath, document.Data.Bytes(), 0644); err != nil {
+	if err := os.WriteFile(filePath, document.Data.Bytes(), 0o644); err != nil {
 		log.WithField("error", err).Error("Failed to create document")
 		return "", err
 	}

@@ -35,16 +35,18 @@ func SetupSocketIO() *socketio.Server {
 	})
 	ioo := socketio.NewServer(nil, opts)
 
+	//nolint:errcheck // Socket.IO event handlers don't return meaningful errors
 	ioo.On("connection", func(clients ...any) {
-		socket := clients[0].(*socketio.Socket)
+		socket := clients[0].(*socketio.Socket) //nolint:errcheck // Type assertion in socket.io handler
 		me := socket.Id()
 		myRoom := socketio.Room(me)
-		ioo.To(myRoom).Emit("init-room")
+		_ = ioo.To(myRoom).Emit("init-room")
 		utils.Log().Printf("init room %v\n", myRoom)
 
+		//nolint:errcheck // Socket.IO event handlers don't return meaningful errors
 		socket.On("join-room", func(datas ...any) {
-			room := socketio.Room(datas[0].(string))
-			roomId := datas[0].(string)
+			room := socketio.Room(datas[0].(string)) //nolint:errcheck // Type assertion in socket.io handler
+			roomId := datas[0].(string)              //nolint:errcheck // Type assertion in socket.io handler
 			utils.Log().Printf("Socket %v has joined %v\n", me, room)
 			socket.Join(room)
 			ioo.In(room).FetchSockets()(func(usersInRoom []*socketio.RemoteSocket, _ error) {
@@ -54,10 +56,10 @@ func SetupSocketIO() *socketio.Server {
 				roomsMutex.Unlock()
 
 				if len(usersInRoom) <= 1 {
-					ioo.To(myRoom).Emit("first-in-room")
+					_ = ioo.To(myRoom).Emit("first-in-room")
 				} else {
 					utils.Log().Printf("emit new user %v in room %v\n", me, room)
-					socket.Broadcast().To(room).Emit("new-user", me)
+					_ = socket.Broadcast().To(room).Emit("new-user", me)
 				}
 
 				// Inform all clients by new users.
@@ -73,16 +75,18 @@ func SetupSocketIO() *socketio.Server {
 			})
 		})
 
+		//nolint:errcheck // Socket.IO event handlers don't return meaningful errors
 		socket.On("server-broadcast", func(datas ...any) {
 			roomID := datas[0].(string)
 			utils.Log().Printf(" user %v sends update to room %v\n", me, roomID)
-			socket.Broadcast().To(socketio.Room(roomID)).Emit("client-broadcast", datas[1], datas[2])
+			_ = socket.Broadcast().To(socketio.Room(roomID)).Emit("client-broadcast", datas[1], datas[2])
 		})
 
+		//nolint:errcheck // Socket.IO event handlers don't return meaningful errors
 		socket.On("server-volatile-broadcast", func(datas ...any) {
 			roomID := datas[0].(string)
 			utils.Log().Printf(" user %v sends volatile update to room %v\n", me, roomID)
-			socket.Volatile().Broadcast().To(socketio.Room(roomID)).Emit("client-broadcast", datas[1], datas[2])
+			_ = socket.Volatile().Broadcast().To(socketio.Room(roomID)).Emit("client-broadcast", datas[1], datas[2])
 		})
 
 		socket.On("user-follow", func(datas ...any) {
