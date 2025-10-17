@@ -461,8 +461,8 @@ func TestFilePermissions(t *testing.T) {
 		t.Fatalf("Stat() failed: %v", err)
 	}
 
-	// Check file permissions (0644)
-	expectedPerms := os.FileMode(0644)
+	// Check file permissions (0o644)
+	expectedPerms := os.FileMode(0o644)
 	actualPerms := info.Mode().Perm()
 	if actualPerms != expectedPerms {
 		t.Errorf("File permissions mismatch: got %o, want %o", actualPerms, expectedPerms)
@@ -477,11 +477,11 @@ func TestReadOnlyDirectory(t *testing.T) {
 	tempDir := t.TempDir()
 
 	// Make directory read-only
-	err := os.Chmod(tempDir, 0444)
+	err := os.Chmod(tempDir, 0o444)
 	if err != nil {
 		t.Fatalf("Chmod() failed: %v", err)
 	}
-	defer os.Chmod(tempDir, 0755) // Restore permissions for cleanup
+	defer os.Chmod(tempDir, 0o755) // Restore permissions for cleanup
 
 	store := NewDocumentStore(tempDir)
 	ctx := context.Background()
