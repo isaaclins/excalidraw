@@ -12,7 +12,7 @@ require (
 	github.com/oklog/ulid/v2 v2.1.0
 	github.com/sirupsen/logrus v1.9.3
 	github.com/zishang520/engine.io/v2 v2.0.6
-	github.com/zishang520/socket.io/v2 v2.0.5
+	github.com/zishang520/socket.io/v2 v2.5.0
 )
 
 require (
