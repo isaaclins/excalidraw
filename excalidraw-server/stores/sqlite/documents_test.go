@@ -237,8 +237,9 @@ func TestCreateSnapshot_MaxSnapshotsLimit(t *testing.T) {
 
 	// Create 5 snapshots
 	ids := make([]string, 5)
+	var id string
 	for i := 0; i < 5; i++ {
-		id, err := store.CreateSnapshot(ctx, roomID, "Snapshot "+string(rune('1'+i)), "", "", "", []byte("data"))
+		id, err = store.CreateSnapshot(ctx, roomID, "Snapshot "+string(rune('1'+i)), "", "", "", []byte("data"))
 		if err != nil {
 			t.Fatalf("CreateSnapshot() failed for snapshot %d: %v", i, err)
 		}
