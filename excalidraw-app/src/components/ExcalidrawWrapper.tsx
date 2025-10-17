@@ -122,8 +122,8 @@ export function ExcalidrawWrapper({ serverConfig, onOpenSettings, onRoomIdChange
         
         const collaborators = new Map(collaboratorsArray);
         
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         excalidrawRef.current.updateScene({
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           appState: {
             collaborators,
           } as any,
