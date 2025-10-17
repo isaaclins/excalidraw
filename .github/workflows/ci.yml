@@ -125,6 +125,16 @@ jobs:
           npm run tauri build
           echo "✅ Tauri app built successfully for ${{ matrix.platform }}"
 
+      - name: 🔏 Sign macOS app (ad-hoc)
+        if: matrix.platform == 'macos'
+        run: |
+          echo "Applying ad-hoc code signature to macOS app..."
+          find excalidraw-app/src-tauri/target/release/bundle/macos -name "*.app" -type d | while read app; do
+            echo "Signing: $app"
+            codesign --force --deep --sign - "$app" 2>/dev/null || true
+          done
+          echo "✅ Ad-hoc signing complete"
+
       - name: Upload Linux artifacts
         if: matrix.platform == 'linux'
         uses: actions/upload-artifact@v4
