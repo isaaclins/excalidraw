@@ -231,7 +231,7 @@ func TestHandleListSnapshots_Success(t *testing.T) {
 	store.CreateSnapshot(context.Background(), roomID, "Snap1", "", "", "", []byte("data1"))
 	store.CreateSnapshot(context.Background(), roomID, "Snap2", "", "", "", []byte("data2"))
 
-	req := httptest.NewRequest(http.MethodGet, "/api/rooms/"+roomID+"/snapshots", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/rooms/"+roomID+"/snapshots", http.NoBody)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("roomId", roomID)
 	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
@@ -258,7 +258,7 @@ func TestHandleListSnapshots_EmptyRoom(t *testing.T) {
 	store := newMockSnapshotStore()
 	handler := HandleListSnapshots(store)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/rooms/empty-room/snapshots", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/rooms/empty-room/snapshots", http.NoBody)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("roomId", "empty-room")
 	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
@@ -286,7 +286,7 @@ func TestHandleListSnapshots_StoreError(t *testing.T) {
 	store.listErr = fmt.Errorf("database error")
 	handler := HandleListSnapshots(store)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/rooms/room-1/snapshots", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/rooms/room-1/snapshots", http.NoBody)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("roomId", "room-1")
 	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
@@ -306,7 +306,7 @@ func TestHandleGetSnapshot_Success(t *testing.T) {
 	// Create a snapshot
 	id, _ := store.CreateSnapshot(context.Background(), "room-1", "Test", "Desc", "", "user1", []byte("data"))
 
-	req := httptest.NewRequest(http.MethodGet, "/api/snapshots/"+id, nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/snapshots/"+id, http.NoBody)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("snapshotId", id)
 	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
@@ -336,7 +336,7 @@ func TestHandleGetSnapshot_NotFound(t *testing.T) {
 	store := newMockSnapshotStore()
 	handler := HandleGetSnapshot(store)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/snapshots/nonexistent", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/snapshots/nonexistent", http.NoBody)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("snapshotId", "nonexistent")
 	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
@@ -356,7 +356,7 @@ func TestHandleDeleteSnapshot_Success(t *testing.T) {
 	// Create a snapshot
 	id, _ := store.CreateSnapshot(context.Background(), "room-1", "Test", "", "", "", []byte("data"))
 
-	req := httptest.NewRequest(http.MethodDelete, "/api/snapshots/"+id, nil)
+	req := httptest.NewRequest(http.MethodDelete, "/api/snapshots/"+id, http.NoBody)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("snapshotId", id)
 	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
@@ -380,7 +380,7 @@ func TestHandleDeleteSnapshot_NotFound(t *testing.T) {
 	store.deleteErr = fmt.Errorf("not found")
 	handler := HandleDeleteSnapshot(store)
 
-	req := httptest.NewRequest(http.MethodDelete, "/api/snapshots/nonexistent", nil)
+	req := httptest.NewRequest(http.MethodDelete, "/api/snapshots/nonexistent", http.NoBody)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("snapshotId", "nonexistent")
 	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
@@ -450,7 +450,7 @@ func TestHandleGetRoomSettings_Success(t *testing.T) {
 	roomID := "room-1"
 	store.UpdateRoomSettings(context.Background(), roomID, 20, 600)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/rooms/"+roomID+"/settings", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/rooms/"+roomID+"/settings", http.NoBody)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("roomId", roomID)
 	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
@@ -477,7 +477,7 @@ func TestHandleGetRoomSettings_Defaults(t *testing.T) {
 	store := newMockSnapshotStore()
 	handler := HandleGetRoomSettings(store)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/rooms/new-room/settings", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/rooms/new-room/settings", http.NoBody)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("roomId", "new-room")
 	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
@@ -591,7 +591,7 @@ func TestHandleGetSnapshotCount_Success(t *testing.T) {
 	store.CreateSnapshot(context.Background(), roomID, "Snap2", "", "", "", []byte("data"))
 	store.CreateSnapshot(context.Background(), roomID, "Snap3", "", "", "", []byte("data"))
 
-	req := httptest.NewRequest(http.MethodGet, "/api/rooms/"+roomID+"/snapshots/count", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/rooms/"+roomID+"/snapshots/count", http.NoBody)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("roomId", roomID)
 	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
@@ -618,7 +618,7 @@ func TestHandleGetSnapshotCount_EmptyRoom(t *testing.T) {
 	store := newMockSnapshotStore()
 	handler := HandleGetSnapshotCount(store)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/rooms/empty-room/snapshots/count", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/rooms/empty-room/snapshots/count", http.NoBody)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("roomId", "empty-room")
 	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
@@ -683,7 +683,7 @@ func TestConcurrentSnapshotOperations(t *testing.T) {
 	}
 
 	// List all snapshots
-	listReq := httptest.NewRequest(http.MethodGet, "/api/rooms/"+roomID+"/snapshots", nil)
+	listReq := httptest.NewRequest(http.MethodGet, "/api/rooms/"+roomID+"/snapshots", http.NoBody)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("roomId", roomID)
 	listReq = listReq.WithContext(context.WithValue(listReq.Context(), chi.RouteCtxKey, rctx))

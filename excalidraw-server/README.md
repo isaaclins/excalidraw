@@ -110,22 +110,86 @@ DATA_SOURCE_NAME=./excalidraw.db
 
 ## Development
 
-### Run from source
+### Quick Start with Make
+
+The project includes a Makefile for common development tasks:
+
+```bash
+# See all available commands
+make help
+
+# Install development tools (golangci-lint, goimports)
+make install-tools
+
+# Format code
+make fmt
+
+# Run linters
+make lint
+
+# Auto-fix linting issues (like npm run lint:fix)
+make lint-fix
+
+# Run tests
+make test
+
+# Run tests with coverage report
+make test-coverage
+
+# Build the server
+make build
+
+# Build and run
+make run
+```
+
+### What Can Be Auto-Fixed?
+
+The `make lint-fix` command can automatically fix:
+
+- ✅ **Code formatting** (gofmt)
+- ✅ **Import organization** (goimports)
+- ✅ **Some gocritic rules** (like using `http.NoBody` instead of `nil`)
+- ✅ **Spelling mistakes** (misspell)
+
+Some issues require manual fixing:
+
+- ❌ **Logic errors** (unused variables, shadowing)
+- ❌ **Type assertions** (errcheck)
+- ❌ **Complex refactoring** (goconst)
+
+### Manual Commands
+
+If you prefer not to use Make:
+
+**Run from source**:
 
 ```bash
 go run main.go --listen :3002 --loglevel debug
 ```
 
-### Build
+**Build**:
 
 ```bash
 go build -o excalidraw-server .
 ```
 
-### Test
+**Test**:
 
 ```bash
 go test ./...
+```
+
+**Lint**:
+
+```bash
+golangci-lint run
+```
+
+**Lint with auto-fix**:
+
+```bash
+golangci-lint run --fix
 ```
 
 ## Deployment
