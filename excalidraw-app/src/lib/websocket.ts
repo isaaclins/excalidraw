@@ -1,5 +1,14 @@
 import { io, Socket } from 'socket.io-client';
 
+// Type for broadcast data - can be any JSON-serializable data
+type BroadcastData = Record<string, unknown>;
+
+// Type for broadcast metadata
+interface BroadcastMetadata {
+  timestamp?: number;
+  userId?: string;
+}
+
 export class CollaborationClient {
   private socket: Socket | null = null;
   private serverUrl: string;
@@ -41,7 +50,7 @@ export class CollaborationClient {
     this.socket.emit('join-room', roomId);
   }
 
-  broadcast(data: any, volatile = false): void {
+  broadcast(data: BroadcastData, volatile = false): void {
     if (!this.socket?.connected || !this.roomId) {
       return;
     }
@@ -50,9 +59,9 @@ export class CollaborationClient {
     this.socket.emit(event, this.roomId, data, null);
   }
 
-  onBroadcast(callback: (data: any) => void): void {
+  onBroadcast(callback: (data: BroadcastData) => void): void {
     if (!this.socket) return;
-    this.socket.on('client-broadcast', (data: any, metadata: any) => {
+    this.socket.on('client-broadcast', (data: BroadcastData, metadata: BroadcastMetadata) => {
       console.log('Received client-broadcast:', { data, metadata });
       callback(data);
     });
