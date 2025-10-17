@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: React to release comment
-        uses: peter-evans/create-or-update-comment@v1
+        uses: peter-evans/create-or-update-comment@v5
         with:
           token: ${{ secrets.PUSH_TRANSLATIONS_COVERAGE_PAT }}
           comment-id: ${{ github.event.comment.id }}
@@ -48,7 +48,7 @@ jobs:
           yarn autorelease preview ${{ github.event.issue.number }}
       - name: Post comment post release
         if: always()
-        uses: peter-evans/create-or-update-comment@v1
+        uses: peter-evans/create-or-update-comment@v5
         with:
           token: ${{ secrets.PUSH_TRANSLATIONS_COVERAGE_PAT }}
           issue-number: ${{ github.event.issue.number }}
