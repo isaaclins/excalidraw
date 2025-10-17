@@ -8,7 +8,14 @@ function App() {
   // Initialize state from localStorage to avoid setState in useEffect
   const [serverConfig, setServerConfig] = useState<ServerConfig | null>(() => {
     const saved = localStorage.getItem('excalidraw-server-config');
-    return saved ? getServerConfig() : null;
+    if (saved) {
+      try {
+        return JSON.parse(saved) as ServerConfig;
+      } catch {
+        return null;
+      }
+    }
+    return null;
   });
   const [showDialog, setShowDialog] = useState(() => {
     const saved = localStorage.getItem('excalidraw-server-config');
