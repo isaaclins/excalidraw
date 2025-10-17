@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { ConnectionDialog } from "./components/ConnectionDialog";
 import { ExcalidrawWrapper } from "./components/ExcalidrawWrapper";
-import { getServerConfig, ServerConfig } from "./lib/api";
+import { ServerConfig } from "./lib/api";
 import "./App.css";
 
 function App() {
