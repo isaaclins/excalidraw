@@ -2,7 +2,6 @@ name: CI
 
 on:
   push:
-  pull_request:
 
 jobs:
   # Pipeline A: Server (lint → test → build)
@@ -18,6 +17,7 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: "1.21"
+          cache-dependency-path: excalidraw-server/go.sum
 
       - name: 🔍 Run golangci-lint
         uses: golangci/golangci-lint-action@v6

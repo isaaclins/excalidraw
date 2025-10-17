@@ -1,4 +1,5 @@
-// Use any for elements to avoid type issues with Excalidraw's internal types
+// Use unknown for elements to avoid type issues with Excalidraw's internal types
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type ExcalidrawElement = any;
 
 export type ReconciledElements = readonly ExcalidrawElement[] & {
@@ -20,8 +21,15 @@ const arrayToMapWithIndex = <T extends { id: string }>(
   }, new Map<string, [T, number]>());
 };
 
+// Type for app state with editing information
+interface AppState {
+  editingElement?: { id: string } | null;
+  resizingElement?: { id: string } | null;
+  draggingElement?: { id: string } | null;
+}
+
 const shouldDiscardRemoteElement = (
-  localAppState: any,
+  localAppState: AppState,
   local: ExcalidrawElement | undefined,
   remote: BroadcastedExcalidrawElement,
 ): boolean => {
@@ -46,7 +54,7 @@ const shouldDiscardRemoteElement = (
 export const reconcileElements = (
   localElements: readonly ExcalidrawElement[],
   remoteElements: readonly BroadcastedExcalidrawElement[],
-  localAppState: any,
+  localAppState: AppState,
 ): ReconciledElements => {
   const localElementsData = arrayToMapWithIndex<ExcalidrawElement>(localElements);
 

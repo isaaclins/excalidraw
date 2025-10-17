@@ -1,26 +1,30 @@
 import { useState, useEffect } from "react";
 import { ConnectionDialog } from "./components/ConnectionDialog";
 import { ExcalidrawWrapper } from "./components/ExcalidrawWrapper";
-import { getServerConfig, ServerConfig } from "./lib/api";
+import { ServerConfig } from "./lib/api";
 import "./App.css";
 
 function App() {
-  const [showDialog, setShowDialog] = useState(true);
-  const [serverConfig, setServerConfig] = useState<ServerConfig | null>(null);
+  // Initialize state from localStorage to avoid setState in useEffect
+  const [serverConfig, setServerConfig] = useState<ServerConfig | null>(() => {
+    const saved = localStorage.getItem('excalidraw-server-config');
+    if (saved) {
+      try {
+        return JSON.parse(saved) as ServerConfig;
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  });
+  const [showDialog, setShowDialog] = useState(() => {
+    const saved = localStorage.getItem('excalidraw-server-config');
+    return !saved; // Show dialog only if no saved config
+  });
 
   const [roomId, setRoomId] = useState<string | null>(null);
 
-  // eslint-disable-next-line react-compiler/react-compiler
   useEffect(() => {
-    // Check if we have a saved config in localStorage
-    const saved = localStorage.getItem('excalidraw-server-config');
-    if (saved) {
-      // User has made a choice before, skip dialog
-      const config = getServerConfig();
-      // eslint-disable-next-line react-hooks/rules-of-hooks
-      setServerConfig(config);
-      setShowDialog(false);
-    }
 
     // Add keyboard shortcuts
     const handleKeyDown = (e: KeyboardEvent) => {

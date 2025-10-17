@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Snapshot, RoomSettings, LocalStorage, ServerStorage } from '../lib/storage';
 import './SnapshotsSidebar.css';
 
@@ -37,14 +37,7 @@ export function SnapshotsSidebar({
   const [formData, setFormData] = useState<SnapshotFormData>({ name: '', description: '' });
   const [settingsFormData, setSettingsFormData] = useState<RoomSettings>(settings);
 
-  useEffect(() => {
-    if (!isVisible) return;
-
-    loadSnapshots();
-    loadSettings();
-  }, [roomId, isVisible]);
-
-  const loadSnapshots = async () => {
+  const loadSnapshots = useCallback(async () => {
     setLoading(true);
     try {
       const result = await storage.listSnapshots(roomId);
@@ -55,9 +48,9 @@ export function SnapshotsSidebar({
     } finally {
       setLoading(false);
     }
-  };
+  }, [storage, roomId]);
 
-  const loadSettings = async () => {
+  const loadSettings = useCallback(async () => {
     try {
       const result = await storage.getRoomSettings(roomId);
       setSettings(result);
@@ -65,7 +58,14 @@ export function SnapshotsSidebar({
     } catch (error) {
       console.error('Failed to load settings:', error);
     }
-  };
+  }, [storage, roomId]);
+
+  useEffect(() => {
+    if (!isVisible) return;
+
+    loadSnapshots();
+    loadSettings();
+  }, [roomId, isVisible, loadSnapshots, loadSettings]);
 
   const handleSaveClick = () => {
     setFormData({ name: '', description: '' });
