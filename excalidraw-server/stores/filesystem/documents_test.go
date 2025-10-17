@@ -6,10 +6,10 @@ import (
 	"excalidraw-server/core"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
-	"strconv"
 )
 
 func TestNewDocumentStore(t *testing.T) {

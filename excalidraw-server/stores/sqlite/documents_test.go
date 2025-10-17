@@ -7,11 +7,11 @@ import (
 	"excalidraw-server/core"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
 	"time"
-	"strconv"
 )
 
 func setupTestDB(t *testing.T) *documentStore {
