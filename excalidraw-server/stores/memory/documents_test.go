@@ -351,10 +351,24 @@ func TestContextCancellation(t *testing.T) {
 }
 
 func TestStoreIsolation(t *testing.T) {
-	// NOTE: The current in-memory implementation uses a global map,
-	// so isolation between store instances is not supported.
-	// This test documents the current behavior.
-	// In a production system, you'd want each store instance to have its own map.
+	ctx := context.Background()
 
-	t.Skip("Skipping test - memory store uses global state (by design for this simple implementation)")
+	store1 := NewDocumentStore()
+	store2 := NewDocumentStore()
+
+	doc := &core.Document{Data: *bytes.NewBufferString("store1")}
+	id, err := store1.Create(ctx, doc)
+	if err != nil {
+		t.Fatalf("Create() failed in store1: %v", err)
+	}
+
+	// store1 should find the document
+	if _, err := store1.FindID(ctx, id); err != nil {
+		t.Fatalf("store1 should locate its document: %v", err)
+	}
+
+	// store2 should not see store1's document
+	if _, err := store2.FindID(ctx, id); err == nil {
+		t.Fatalf("store2 should not find document created by store1")
+	}
 }
