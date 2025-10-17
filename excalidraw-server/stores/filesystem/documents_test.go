@@ -240,7 +240,6 @@ func TestMultipleDocuments(t *testing.T) {
 
 	// Create multiple documents
 	for i := 0; i < numDocs; i++ {
-		// Use strconv.Itoa for deterministic labels; using letters can be fragile when i >= 26
 		data := "document-" + strconv.Itoa(i)
 		expectedData[i] = data
 		doc := &core.Document{
