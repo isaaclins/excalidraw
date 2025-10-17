@@ -214,7 +214,7 @@ func TestHandleGet_Success(t *testing.T) {
 		Data: *bytes.NewBufferString(testData),
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/api/v2/"+testID, nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v2/"+testID, http.NoBody)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", testID)
 	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
@@ -241,7 +241,7 @@ func TestHandleGet_NotFound(t *testing.T) {
 	store := newMockStore()
 	handler := HandleGet(store)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/v2/nonexistent", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v2/nonexistent", http.NoBody)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", "nonexistent")
 	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
@@ -269,7 +269,7 @@ func TestHandleGet_EmptyDocument(t *testing.T) {
 		Data: *bytes.NewBuffer(nil),
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/api/v2/"+testID, nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v2/"+testID, http.NoBody)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", testID)
 	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
@@ -302,7 +302,7 @@ func TestHandleGet_LargeDocument(t *testing.T) {
 		Data: *bytes.NewBufferString(largeData),
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/api/v2/"+testID, nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v2/"+testID, http.NoBody)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", testID)
 	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
@@ -335,7 +335,7 @@ func TestHandleGet_SpecialCharacters(t *testing.T) {
 		Data: *bytes.NewBufferString(testData),
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/api/v2/"+testID, nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v2/"+testID, http.NoBody)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", testID)
 	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
@@ -363,7 +363,7 @@ func TestHandleGet_StoreError(t *testing.T) {
 	store.findErr = fmt.Errorf("database error")
 	handler := HandleGet(store)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/v2/test-id", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v2/test-id", http.NoBody)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", "test-id")
 	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
@@ -381,7 +381,7 @@ func TestHandleGet_MissingIDParameter(t *testing.T) {
 	store := newMockStore()
 	handler := HandleGet(store)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/v2/", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v2/", http.NoBody)
 	// Don't add ID parameter
 	rctx := chi.NewRouteContext()
 	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
@@ -418,7 +418,7 @@ func TestCreateAndRetrieve_Integration(t *testing.T) {
 	}
 
 	// Retrieve the document
-	getReq := httptest.NewRequest(http.MethodGet, "/api/v2/"+createResponse.ID, nil)
+	getReq := httptest.NewRequest(http.MethodGet, "/api/v2/"+createResponse.ID, http.NoBody)
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", createResponse.ID)
 	getReq = getReq.WithContext(context.WithValue(getReq.Context(), chi.RouteCtxKey, rctx))
@@ -473,7 +473,7 @@ func TestConcurrentCreateAndGet(t *testing.T) {
 			}
 
 			// Get
-			getReq := httptest.NewRequest(http.MethodGet, "/api/v2/"+response.ID, nil)
+			getReq := httptest.NewRequest(http.MethodGet, "/api/v2/"+response.ID, http.NoBody)
 			rctx := chi.NewRouteContext()
 			rctx.URLParams.Add("id", response.ID)
 			getReq = getReq.WithContext(context.WithValue(getReq.Context(), chi.RouteCtxKey, rctx))
