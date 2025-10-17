@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"strconv"
 )
 
 func TestNewDocumentStore(t *testing.T) {
@@ -239,7 +240,8 @@ func TestMultipleDocuments(t *testing.T) {
 
 	// Create multiple documents
 	for i := 0; i < numDocs; i++ {
-		data := "document-" + string(rune('A'+i))
+		// Use strconv.Itoa for deterministic labels; using letters can be fragile when i >= 26
+		data := "document-" + strconv.Itoa(i)
 		expectedData[i] = data
 		doc := &core.Document{
 			Data: *bytes.NewBufferString(data),
@@ -291,7 +293,7 @@ func TestConcurrentCreate(t *testing.T) {
 		go func(index int) {
 			defer wg.Done()
 
-			data := "concurrent-doc-" + string(rune('0'+index%10))
+			data := "concurrent-doc-" + strconv.Itoa(index%10)
 			doc := &core.Document{
 				Data: *bytes.NewBufferString(data),
 			}
@@ -378,7 +380,7 @@ func TestConcurrentReadWrite(t *testing.T) {
 		go func(index int) {
 			defer wg.Done()
 			for j := 0; j < 5; j++ {
-				data := "writer-" + string(rune('0'+index))
+				data := "writer-" + strconv.Itoa(index)
 				doc := &core.Document{
 					Data: *bytes.NewBufferString(data),
 				}

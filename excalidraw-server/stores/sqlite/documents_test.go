@@ -11,6 +11,7 @@ import (
 	"sync"
 	"testing"
 	"time"
+	"strconv"
 )
 
 func setupTestDB(t *testing.T) *documentStore {
@@ -239,7 +240,7 @@ func TestCreateSnapshot_MaxSnapshotsLimit(t *testing.T) {
 	ids := make([]string, 5)
 	var id string
 	for i := 0; i < 5; i++ {
-		id, err = store.CreateSnapshot(ctx, roomID, "Snapshot "+string(rune('1'+i)), "", "", "", []byte("data"))
+		id, err = store.CreateSnapshot(ctx, roomID, "Snapshot "+strconv.Itoa(i+1), "", "", "", []byte("data"))
 		if err != nil {
 			t.Fatalf("CreateSnapshot() failed for snapshot %d: %v", i, err)
 		}
@@ -282,7 +283,7 @@ func TestListSnapshots_Success(t *testing.T) {
 
 	// Create multiple snapshots
 	for i := 0; i < 5; i++ {
-		_, err := store.CreateSnapshot(ctx, roomID, "Snapshot "+string(rune('1'+i)), "", "", "", []byte("data"))
+		_, err := store.CreateSnapshot(ctx, roomID, "Snapshot "+strconv.Itoa(i+1), "", "", "", []byte("data"))
 		if err != nil {
 			t.Fatalf("CreateSnapshot() failed: %v", err)
 		}
