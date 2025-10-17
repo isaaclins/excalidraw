@@ -32,12 +32,14 @@ jobs:
         run: tests/server/run.sh
 
       - name: 🔨 Build server executable
+        if: github.ref == 'refs/heads/release'
         run: |
           cd excalidraw-server
           go build -o excalidraw-server
           echo "✅ Server built successfully"
 
       - name: Upload server artifact
+        if: github.ref == 'refs/heads/release'
         uses: actions/upload-artifact@v4
         with:
           name: excalidraw-server
@@ -99,12 +101,13 @@ jobs:
           npm test
 
       - name: Install Rust
+        if: github.ref == 'refs/heads/release'
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.rust-target }}
 
       - name: Install Tauri dependencies (Linux)
-        if: matrix.platform == 'linux'
+        if: matrix.platform == 'linux' && github.ref == 'refs/heads/release'
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev \
@@ -118,13 +121,14 @@ jobs:
             librsvg2-dev
 
       - name: 🔨 Build Tauri app
+        if: github.ref == 'refs/heads/release'
         run: |
           cd excalidraw-app
           npm run tauri build
           echo "✅ Tauri app built successfully for ${{ matrix.platform }}"
 
       - name: 🔏 Sign macOS app (ad-hoc)
-        if: matrix.platform == 'macos'
+        if: matrix.platform == 'macos' && github.ref == 'refs/heads/release'
         run: |
           echo "Applying ad-hoc code signature to macOS app..."
           find excalidraw-app/src-tauri/target/release/bundle/macos -name "*.app" -type d | while read app; do
@@ -134,7 +138,7 @@ jobs:
           echo "✅ Ad-hoc signing complete"
 
       - name: Upload Linux artifacts
-        if: matrix.platform == 'linux'
+        if: matrix.platform == 'linux' && github.ref == 'refs/heads/release'
         uses: actions/upload-artifact@v4
         with:
           name: excalidraw-linux
@@ -143,7 +147,7 @@ jobs:
             excalidraw-app/src-tauri/target/release/bundle/appimage/*.AppImage
 
       - name: Upload macOS artifacts
-        if: matrix.platform == 'macos'
+        if: matrix.platform == 'macos' && github.ref == 'refs/heads/release'
         uses: actions/upload-artifact@v4
         with:
           name: excalidraw-macos
@@ -152,7 +156,7 @@ jobs:
             excalidraw-app/src-tauri/target/release/bundle/macos/*.app
 
       - name: Upload Windows artifacts
-        if: matrix.platform == 'windows'
+        if: matrix.platform == 'windows' && github.ref == 'refs/heads/release'
         uses: actions/upload-artifact@v4
         with:
           name: excalidraw-windows
