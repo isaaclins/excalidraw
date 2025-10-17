@@ -33,7 +33,7 @@
     "@vitest/coverage-v8": "0.33.0",
     "@vitest/ui": "0.32.2",
     "chai": "4.3.6",
-    "dotenv": "16.0.1",
+    "dotenv": "17.2.3",
     "eslint-config-prettier": "8.5.0",
     "eslint-config-react-app": "7.0.1",
     "eslint-plugin-prettier": "3.3.1",
