@@ -1,48 +1,47 @@
-linters-settings:
-  errcheck:
-    check-type-assertions: true
-  goconst:
-    min-len: 2
-    min-occurrences: 3
-  gocritic:
-    enabled-tags:
-      - diagnostic
-      - experimental
-      - opinionated
-      - performance
-      - style
-  govet:
-    enable:
-      - shadow
-  nolintlint:
-    require-explanation: true
-    require-specific: true
+version: 2
 
 linters:
-  disable-all: true
+  default: none
   enable:
     - errcheck
-    - gosimple
     - govet
     - ineffassign
     - staticcheck
     - unused
-    - gofmt
-    - goimports
     - goconst
     - gocritic
     - misspell
     - unparam
+  settings:
+    errcheck:
+      check-type-assertions: true
+    goconst:
+      min-len: 2
+      min-occurrences: 3
+    gocritic:
+      enabled-tags:
+        - diagnostic
+        - experimental
+        - opinionated
+        - performance
+        - style
+    govet:
+      enable:
+        - shadow
+  exclusions:
+    paths:
+      - vendor
+      - target
+    rules:
+      - path: _test\.go
+        linters:
+          - goconst
+          - errcheck
 
-issues:
-  exclude-rules:
-    - path: _test\.go
-      linters:
-        - goconst
-        - errcheck
-  exclude-dirs:
-    - vendor
-    - target
+formatters:
+  enable:
+    - gofmt
+    - goimports
 
 run:
   timeout: 5m
