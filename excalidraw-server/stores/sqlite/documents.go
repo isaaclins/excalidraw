@@ -7,7 +7,7 @@ import (
 	"fmt"
 
 	"database/sql"
-	"log"
+	stdlog "log"
 
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/oklog/ulid/v2"
@@ -22,14 +22,14 @@ func NewDocumentStore(dataSourceName string) core.DocumentStore {
 	db, err := sql.Open("sqlite3", dataSourceName)
 
 	if err != nil {
-		log.Fatal(err)
+	stdlog.Fatal(err)
 	}
 
 	// Create documents table
 	sts := `CREATE TABLE IF NOT EXISTS documents (id TEXT PRIMARY KEY, data BLOB);`
 	_, err = db.Exec(sts)
 	if err != nil {
-		log.Fatal(err)
+	stdlog.Fatal(err)
 	}
 
 	// Create snapshots table
@@ -45,7 +45,7 @@ func NewDocumentStore(dataSourceName string) core.DocumentStore {
 	);`
 	_, err = db.Exec(snapshotsTable)
 	if err != nil {
-		log.Fatal(err)
+	stdlog.Fatal(err)
 	}
 
 	// Create room_settings table
@@ -56,7 +56,7 @@ func NewDocumentStore(dataSourceName string) core.DocumentStore {
 	);`
 	_, err = db.Exec(settingsTable)
 	if err != nil {
-		log.Fatal(err)
+	stdlog.Fatal(err)
 	}
 
 	return &documentStore{db}
@@ -183,7 +183,11 @@ func (s *documentStore) ListSnapshots(ctx context.Context, roomID string) ([]Sna
 		log.WithField("error", err).Error("Failed to list snapshots")
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() {
+		if cerr := rows.Close(); cerr != nil {
+			log.WithError(cerr).Warn("Failed to close snapshot rows")
+		}
+	}()
 
 	var snapshots []Snapshot
 	for rows.Next() {
