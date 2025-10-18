@@ -67,7 +67,7 @@
     "canvas-roundrect-polyfill": "0.0.1",
     "clsx": "1.1.1",
     "cross-env": "10.1.0",
-    "image-blob-reduce": "3.0.1",
+    "image-blob-reduce": "4.1.0",
     "jotai": "2.15.0",
     "lodash.throttle": "4.1.1",
     "nanoid": "5.1.6",
