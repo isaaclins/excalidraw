@@ -22,14 +22,14 @@ func NewDocumentStore(dataSourceName string) core.DocumentStore {
 	db, err := sql.Open("sqlite3", dataSourceName)
 
 	if err != nil {
-	stdlog.Fatal(err)
+		stdlog.Fatal(err)
 	}
 
 	// Create documents table
 	sts := `CREATE TABLE IF NOT EXISTS documents (id TEXT PRIMARY KEY, data BLOB);`
 	_, err = db.Exec(sts)
 	if err != nil {
-	stdlog.Fatal(err)
+		stdlog.Fatal(err)
 	}
 
 	// Create snapshots table
@@ -45,7 +45,7 @@ func NewDocumentStore(dataSourceName string) core.DocumentStore {
 	);`
 	_, err = db.Exec(snapshotsTable)
 	if err != nil {
-	stdlog.Fatal(err)
+		stdlog.Fatal(err)
 	}
 
 	// Create room_settings table
@@ -56,7 +56,7 @@ func NewDocumentStore(dataSourceName string) core.DocumentStore {
 	);`
 	_, err = db.Exec(settingsTable)
 	if err != nil {
-	stdlog.Fatal(err)
+		stdlog.Fatal(err)
 	}
 
 	return &documentStore{db}
