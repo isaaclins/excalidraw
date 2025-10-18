@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/go-chi/chi/v5"
@@ -17,6 +18,7 @@ import (
 
 // Mock document store for testing
 type mockDocumentStore struct {
+	mu        sync.RWMutex
 	documents map[string]*core.Document
 	createErr error
 	findErr   error
@@ -32,6 +34,8 @@ func (m *mockDocumentStore) Create(ctx context.Context, doc *core.Document) (str
 	if m.createErr != nil {
 		return "", m.createErr
 	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	id := fmt.Sprintf("mock-id-%d", len(m.documents))
 	m.documents[id] = doc
 	return id, nil
@@ -41,7 +45,9 @@ func (m *mockDocumentStore) FindID(ctx context.Context, id string) (*core.Docume
 	if m.findErr != nil {
 		return nil, m.findErr
 	}
+	m.mu.RLock()
 	doc, exists := m.documents[id]
+	m.mu.RUnlock()
 	if !exists {
 		return nil, fmt.Errorf("document with id %s not found", id)
 	}
