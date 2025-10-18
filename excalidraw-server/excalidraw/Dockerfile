@@ -7,7 +7,7 @@ COPY . .
 RUN npm install
 RUN cd excalidraw-app && npm run build:app:docker
 
-FROM nginx:1.21-alpine
+FROM nginx:1.29-alpine
 
 COPY --from=build /home/node/app/excalidraw-app/build /usr/share/nginx/html
 
