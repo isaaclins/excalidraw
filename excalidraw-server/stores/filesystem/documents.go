@@ -5,7 +5,7 @@ import (
 	"context"
 	"excalidraw-server/core"
 	"fmt"
-	"log"
+	stdlog "log"
 	"os"
 	"path/filepath"
 
@@ -19,7 +19,7 @@ type documentStore struct {
 
 func NewDocumentStore(basePath string) core.DocumentStore {
 	if err := os.MkdirAll(basePath, 0o755); err != nil {
-		log.Fatalf("failed to create base directory: %v", err)
+		stdlog.Fatalf("failed to create base directory: %v", err)
 	}
 
 	return &documentStore{basePath: basePath}
