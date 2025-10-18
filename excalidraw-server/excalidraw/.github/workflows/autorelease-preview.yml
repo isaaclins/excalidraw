@@ -17,7 +17,7 @@ jobs:
           reactions: "+1"
       - name: Get PR SHA
         id: sha
-        uses: actions/github-script@v4
+        uses: actions/github-script@v8
         with:
           result-encoding: string
           script: |
