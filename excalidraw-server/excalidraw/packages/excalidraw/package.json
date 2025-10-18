@@ -110,7 +110,7 @@
     "fake-indexeddb": "6.2.4",
     "import-meta-loader": "1.1.0",
     "mini-css-extract-plugin": "2.6.1",
-    "postcss-loader": "7.0.1",
+    "postcss-loader": "7.3.4",
     "react": "19.2.0",
     "react-dom": "19.2.0",
     "sass-loader": "16.0.5",
