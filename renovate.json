@@ -1,19 +1,11 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": [
-    "config:recommended"
-  ],
-  "baseBranches": [
-    "dev"
-  ],
+  "extends": ["config:recommended"],
+  "baseBranches": ["dev"],
   "packageRules": [
     {
       "description": "Automerge non-major updates once CI succeeds",
-      "matchUpdateTypes": [
-        "major",
-        "minor",
-        "patch"
-      ],
+      "matchUpdateTypes": ["major", "minor", "patch"],
       "automerge": true,
       "automergeType": "pr"
     }
