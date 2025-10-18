@@ -96,7 +96,7 @@
     "@size-limit/preset-big-lib": "9.0.0",
     "@types/pako": "2.0.4",
     "@types/pica": "9.0.5",
-    "@types/resize-observer-browser": "0.1.7",
+    "@types/resize-observer-browser": "0.1.11",
     "autoprefixer": "10.4.7",
     "babel-loader": "8.2.5",
     "babel-plugin-transform-class-properties": "6.24.1",
