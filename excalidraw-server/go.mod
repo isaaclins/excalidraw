@@ -9,7 +9,7 @@ require (
 	github.com/go-chi/cors v1.2.1
 	github.com/go-chi/render v1.0.3
 	github.com/mattn/go-sqlite3 v1.14.22
-	github.com/oklog/ulid/v2 v2.1.0
+	github.com/oklog/ulid/v2 v2.1.1
 	github.com/sirupsen/logrus v1.9.3
 	github.com/zishang520/engine.io/v2 v2.0.6
 	github.com/zishang520/socket.io/v2 v2.0.5
