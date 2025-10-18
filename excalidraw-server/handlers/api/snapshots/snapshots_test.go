@@ -151,8 +151,8 @@ func (m *mockSnapshotStore) GetRoomSettings(ctx context.Context, roomID string) 
 		}
 		return defaultSettings, nil
 	}
-	copy := *settings
-	return &copy, nil
+	settingsCopy := *settings
+	return &settingsCopy, nil
 }
 
 func (m *mockSnapshotStore) UpdateRoomSettings(ctx context.Context, roomID string, maxSnapshots, autoSaveInterval int) error {
