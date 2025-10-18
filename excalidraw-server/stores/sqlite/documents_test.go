@@ -5,6 +5,7 @@ import (
 	"context"
 	"database/sql"
 	"excalidraw-server/core"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -13,6 +14,15 @@ import (
 	"testing"
 	"time"
 )
+
+func TestMain(m *testing.M) {
+	if !CGOEnabled {
+		fmt.Println("skipping sqlite store tests: CGO disabled")
+		os.Exit(0)
+	}
+
+	os.Exit(m.Run())
+}
 
 func setupTestDB(t *testing.T) *documentStore {
 	t.Helper()
