@@ -21,7 +21,7 @@ jobs:
           cache-dependency-path: excalidraw-server/go.sum
 
       - name: 🔍 Run golangci-lint
-        uses: golangci/golangci-lint-action@v6
+        uses: golangci/golangci-lint-action@v8
         with:
           version: latest
           working-directory: excalidraw-server
@@ -69,7 +69,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
           cache: "npm"
           cache-dependency-path: excalidraw-app/package-lock.json
 
