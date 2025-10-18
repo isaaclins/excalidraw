@@ -1,0 +1,85 @@
+name: Tests
+
+on:
+  push:
+    branches:
+      - dev
+      - main
+
+jobs:
+  server-tests:
+    name: Server Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.21"
+          cache-dependency-path: excalidraw-server/go.sum
+
+      - name: 🔍 Run golangci-lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: latest
+          working-directory: excalidraw-server
+
+      - name: Make test script executable
+        run: chmod +x tests/server/run.sh
+
+      - name: 🧪 Run server tests
+        run: tests/server/run.sh
+
+  client-tests:
+    name: Client Tests - ${{ matrix.platform }}
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux
+            os: ubuntu-latest
+          - platform: macos
+            os: macos-latest
+          - platform: windows
+            os: windows-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: excalidraw-app/package-lock.json
+
+      - name: Install dependencies
+        run: |
+          cd excalidraw-app
+          npm ci
+
+      - name: 🔍 Run ESLint
+        continue-on-error: true
+        run: |
+          cd excalidraw-app
+          npm run lint
+
+      - name: Make test script executable
+        if: matrix.platform != 'windows'
+        run: chmod +x tests/client/run.sh
+
+      - name: 🧪 Run client tests (Unix)
+        if: matrix.platform != 'windows'
+        run: tests/client/run.sh
+
+      - name: 🧪 Run client tests (Windows)
+        if: matrix.platform == 'windows'
+        run: |
+          cd excalidraw-app
+          npm test
