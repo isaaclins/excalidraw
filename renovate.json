@@ -5,5 +5,17 @@
   ],
   "baseBranches": [
     "dev"
+  ],
+  "packageRules": [
+    {
+      "description": "Automerge non-major updates once CI succeeds",
+      "matchUpdateTypes": [
+        "major",
+        "minor",
+        "patch"
+      ],
+      "automerge": true,
+      "automergeType": "pr"
+    }
   ]
 }
