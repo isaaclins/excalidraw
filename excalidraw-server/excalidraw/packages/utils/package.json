@@ -65,7 +65,7 @@
     "babel-loader": "8.2.5",
     "babel-plugin-transform-class-properties": "6.24.1",
     "cross-env": "10.1.0",
-    "css-loader": "6.7.1",
+    "css-loader": "6.11.0",
     "file-loader": "6.2.0",
     "sass-loader": "16.0.5",
     "ts-loader": "9.5.4",
