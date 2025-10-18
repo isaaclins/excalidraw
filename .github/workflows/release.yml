@@ -1,12 +1,13 @@
-name: CI
+name: Release Build
 
 on:
   push:
+    branches:
+      - releases
 
 jobs:
-  # Pipeline A: Server (lint → test → build)
-  server-pipeline:
-    name: Server Pipeline
+  server-release:
+    name: Server Release
     runs-on: ubuntu-latest
 
     steps:
@@ -43,9 +44,8 @@ jobs:
           name: excalidraw-server
           path: excalidraw-server/excalidraw-server
 
-  # Pipeline B: Client (lint → test → build)
-  client-pipeline:
-    name: Client Pipeline - ${{ matrix.platform }}
+  client-release:
+    name: Client Release - ${{ matrix.platform }}
     runs-on: ${{ matrix.os }}
 
     strategy:
@@ -79,7 +79,6 @@ jobs:
           npm ci
 
       - name: 🔍 Run ESLint
-        continue-on-error: true
         run: |
           cd excalidraw-app
           npm run lint
