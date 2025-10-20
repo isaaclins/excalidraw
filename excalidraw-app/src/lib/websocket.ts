@@ -199,12 +199,12 @@ export class CollaborationClient {
     this.flushQueue();
   }
 
-  onBroadcast(callback: (data: BroadcastData) => void): void {
+  onBroadcast(callback: (data: BroadcastData, metadata: BroadcastMetadata) => void): void {
     if (!this.socket) return;
 
     const handler = (data: BroadcastData, metadata: BroadcastMetadata) => {
       console.log('Received client-broadcast:', { data, metadata });
-      callback(data);
+      callback(data, metadata ?? {});
     };
 
     this.registerListener('client-broadcast', handler as (...args: unknown[]) => void);

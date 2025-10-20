@@ -185,7 +185,7 @@ describe('CollaborationClient', () => {
       const testClient = new CollaborationClient('http://test:3002');
       
       // These should not crash
-      expect(() => testClient.onBroadcast(() => {})).not.toThrow();
+  expect(() => testClient.onBroadcast((_data, _metadata) => {})).not.toThrow();
       expect(() => testClient.onRoomUserChange(() => {})).not.toThrow();
       expect(() => testClient.onNewUser(() => {})).not.toThrow();
       expect(() => testClient.onFirstInRoom(() => {})).not.toThrow();
