@@ -109,7 +109,7 @@
     "eslint-plugin-react": "7.32.2",
     "fake-indexeddb": "6.2.4",
     "import-meta-loader": "1.1.0",
-    "mini-css-extract-plugin": "2.6.1",
+    "mini-css-extract-plugin": "2.9.4",
     "postcss-loader": "8.2.0",
     "react": "19.2.0",
     "react-dom": "19.2.0",
