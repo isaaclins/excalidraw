@@ -10,7 +10,7 @@ describe('getServerConfig', () => {
     const config = getServerConfig();
 
     expect(config).toEqual({
-      url: 'http://localhost:3002',
+      url: '',
       enabled: false,
     });
   });
@@ -34,7 +34,7 @@ describe('getServerConfig', () => {
     const config = getServerConfig();
 
     expect(config).toEqual({
-      url: 'http://localhost:3002',
+      url: '',
       enabled: false,
     });
 

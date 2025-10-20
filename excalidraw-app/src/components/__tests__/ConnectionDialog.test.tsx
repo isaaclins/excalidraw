@@ -1,350 +1,154 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import type { RenderResult } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import type { ComponentProps } from 'react';
 import { ConnectionDialog } from '../ConnectionDialog';
+import type { ServerConfig } from '../../lib/api';
+
+type ConnectionDialogProps = ComponentProps<typeof ConnectionDialog>;
+type RenderDialogResult = RenderResult & {
+	user: ReturnType<typeof userEvent['setup']>;
+	onServerConfigChange: ReturnType<typeof vi.fn>;
+	onSelectRoom: ReturnType<typeof vi.fn>;
+	onDisconnect: ReturnType<typeof vi.fn>;
+};
+
+const renderDialog = (overrides: Partial<ConnectionDialogProps> = {}): RenderDialogResult => {
+	const onServerConfigChange = vi.fn();
+	const onSelectRoom = vi.fn();
+	const onDisconnect = vi.fn();
+
+	const props: ConnectionDialogProps = {
+		serverConfig: { url: '', enabled: false } as ServerConfig,
+		username: '',
+		onUsernameChange: vi.fn(),
+		onServerConfigChange: onServerConfigChange as ConnectionDialogProps['onServerConfigChange'],
+		onSelectRoom: onSelectRoom as ConnectionDialogProps['onSelectRoom'],
+		onDisconnect: onDisconnect as ConnectionDialogProps['onDisconnect'],
+		onClose: vi.fn(),
+		currentRoomId: undefined,
+		...overrides,
+	};
+
+	const user = userEvent.setup();
+	const renderResult = render(<ConnectionDialog {...props} />);
+
+	return {
+		...renderResult,
+		user,
+		onServerConfigChange,
+		onSelectRoom,
+		onDisconnect,
+	} as RenderDialogResult;
+};
+
+let fetchMock: ReturnType<typeof vi.fn>;
+
+beforeEach(() => {
+	vi.clearAllMocks();
+	fetchMock = vi.fn().mockResolvedValue({
+		ok: true,
+		json: async () => ({}),
+	});
+	vi.stubGlobal('fetch', fetchMock);
+});
+
+afterEach(() => {
+	vi.unstubAllGlobals();
+	vi.resetAllMocks();
+});
 
 describe('ConnectionDialog', () => {
-  const mockOnConnect = vi.fn();
-  const mockOnClose = vi.fn();
+	it('renders username and server inputs', () => {
+		renderDialog();
 
-  beforeEach(() => {
-    vi.clearAllMocks();
-    localStorage.clear();
-  });
+		expect(screen.getByLabelText(/Username/i)).toBeInTheDocument();
+		expect(screen.getByLabelText(/Server URL/i)).toBeInTheDocument();
+	});
 
-  describe('initial render', () => {
-    it('should render with default values', () => {
-      render(
-        <ConnectionDialog 
-          onConnect={mockOnConnect} 
-          onClose={mockOnClose}
-          isConnected={false}
-        />
-      );
+		it('shows stored server hint when input blank', async () => {
+			renderDialog({ serverConfig: { url: 'http://localhost:3002', enabled: false } });
+			await waitFor(() => expect(fetchMock).toHaveBeenCalled());
 
-      expect(screen.getByText('Server Settings')).toBeInTheDocument();
-      expect(screen.getByLabelText(/Server URL/i)).toBeInTheDocument();
-      expect(screen.getByLabelText(/Room ID/i)).toBeInTheDocument();
-    });
+		expect(screen.getByText(/Currently using:/i)).toHaveTextContent('http://localhost:3002');
+	});
 
-    it('should load server URL from localStorage', () => {
-      localStorage.setItem('excalidraw-server-config', JSON.stringify({
-        url: 'http://custom-server:3002',
-        enabled: true,
-      }));
+	it('disables connect button without server URL', async () => {
+		const { user } = renderDialog();
+		const connectButton = screen.getByRole('button', { name: /^connect$/i });
+		expect(connectButton).toBeDisabled();
 
-      render(
-        <ConnectionDialog 
-          onConnect={mockOnConnect} 
-          onClose={mockOnClose}
-          isConnected={false}
-        />
-      );
+		await user.type(screen.getByLabelText(/Server URL/i), 'http://example.com');
+		expect(connectButton).not.toBeDisabled();
+	});
 
-      const serverInput = screen.getByLabelText(/Server URL/i) as HTMLInputElement;
-      expect(serverInput.value).toBe('http://custom-server:3002');
-    });
+	it('fetches rooms and updates config when connecting', async () => {
+		fetchMock.mockResolvedValue({
+			ok: true,
+			json: async () => ({ alpha: 2, beta: 1 }),
+		});
 
-    it('should display current room ID when connected', () => {
-      render(
-        <ConnectionDialog 
-          onConnect={mockOnConnect} 
-          onClose={mockOnClose}
-          currentRoomId="room-123"
-          isConnected={true}
-        />
-      );
+		const { user, onServerConfigChange } = renderDialog();
 
-      expect(screen.getByText('room-123')).toBeInTheDocument();
-      expect(screen.getByText(/Current Room ID/i)).toBeInTheDocument();
-    });
+		await user.type(screen.getByLabelText(/Server URL/i), 'http://example.com/');
+		await user.click(screen.getByRole('button', { name: /^connect$/i }));
 
-    it('should not display room info when not connected', () => {
-      render(
-        <ConnectionDialog 
-          onConnect={mockOnConnect} 
-          onClose={mockOnClose}
-          isConnected={false}
-        />
-      );
+		await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('http://example.com/api/rooms'));
+		await waitFor(() =>
+			expect(onServerConfigChange).toHaveBeenCalledWith({ url: 'http://example.com', enabled: false }),
+		);
 
-      expect(screen.queryByText(/Current Room ID/i)).not.toBeInTheDocument();
-    });
-  });
+		expect(screen.getByText('alpha')).toBeInTheDocument();
+		expect(screen.getByText('beta')).toBeInTheDocument();
+	});
 
-  describe('user interactions', () => {
-    it('should close dialog when clicking outside', () => {
-      render(
-        <ConnectionDialog 
-          onConnect={mockOnConnect} 
-          onClose={mockOnClose}
-          isConnected={false}
-        />
-      );
+	it('joins selected room', async () => {
+		fetchMock.mockResolvedValue({
+			ok: true,
+			json: async () => ({ roomOne: 1 }),
+		});
 
-      const overlay = screen.getByText('Server Settings').parentElement?.parentElement;
-      if (overlay) {
-        fireEvent.click(overlay);
-        expect(mockOnClose).toHaveBeenCalled();
-      }
-    });
+		const { user, onSelectRoom } = renderDialog();
 
-    it('should not close when clicking inside dialog', () => {
-      render(
-        <ConnectionDialog 
-          onConnect={mockOnConnect} 
-          onClose={mockOnClose}
-          isConnected={false}
-        />
-      );
+		await user.type(screen.getByLabelText(/Server URL/i), 'http://example.com');
+		await user.click(screen.getByRole('button', { name: /^connect$/i }));
 
-      const dialog = screen.getByText('Server Settings').parentElement;
-      if (dialog) {
-        fireEvent.click(dialog);
-        expect(mockOnClose).not.toHaveBeenCalled();
-      }
-    });
-  });
+		await waitFor(() => screen.getByText('roomOne'));
+		await user.click(screen.getByText('roomOne'));
 
-  describe('connect button', () => {
-    it('should call onConnect with config and room ID', async () => {
-      const user = userEvent.setup();
-      render(
-        <ConnectionDialog 
-          onConnect={mockOnConnect} 
-          onClose={mockOnClose}
-          isConnected={false}
-        />
-      );
+		expect(onSelectRoom).toHaveBeenCalledWith('roomOne', 'http://example.com');
+	});
 
-      const serverInput = screen.getByLabelText(/Server URL/i);
-      const roomInput = screen.getByLabelText(/Room ID/i);
-      
-      await user.clear(serverInput);
-      await user.type(serverInput, 'http://test:3002');
-      await user.type(roomInput, 'test-room');
+	it('creates new room using username', async () => {
+		fetchMock.mockResolvedValue({
+			ok: true,
+			json: async () => ({}),
+		});
 
-      const connectButton = screen.getByText('Connect to Server');
-      await user.click(connectButton);
+		const { user, onSelectRoom } = renderDialog({ username: 'Alice' });
 
-      await waitFor(() => {
-        expect(mockOnConnect).toHaveBeenCalledWith(
-          { url: 'http://test:3002', enabled: true },
-          'test-room'
-        );
-      });
-    });
+		await user.type(screen.getByLabelText(/Server URL/i), 'http://example.com');
+		await user.click(screen.getByRole('button', { name: /^connect$/i }));
 
-    it('should be disabled when server URL is empty', async () => {
-      const user = userEvent.setup();
-      render(
-        <ConnectionDialog 
-          onConnect={mockOnConnect} 
-          onClose={mockOnClose}
-          isConnected={false}
-        />
-      );
+		await waitFor(() => expect(fetchMock).toHaveBeenCalled());
 
-      const serverInput = screen.getByLabelText(/Server URL/i);
-      await user.clear(serverInput);
+		await user.click(screen.getByRole('button', { name: /Create “Alice's Room”/i }));
 
-      const connectButton = screen.getByText('Connect to Server');
-      expect(connectButton).toBeDisabled();
-    });
+		expect(onSelectRoom).toHaveBeenCalledWith(expect.stringMatching(/^alice-s-room-/), 'http://example.com');
+	});
 
-    it('should handle connection without room ID', async () => {
-      const user = userEvent.setup();
-      render(
-        <ConnectionDialog 
-          onConnect={mockOnConnect} 
-          onClose={mockOnClose}
-          isConnected={false}
-        />
-      );
+		it('invokes disconnect handler', async () => {
+			const { user, onDisconnect } = renderDialog({
+			serverConfig: { url: 'http://example.com', enabled: true },
+			currentRoomId: 'alpha',
+		});
 
-      const serverInput = screen.getByLabelText(/Server URL/i);
-      await user.clear(serverInput);
-      await user.type(serverInput, 'http://test:3002');
+			await waitFor(() => expect(fetchMock).toHaveBeenCalled());
 
-      const connectButton = screen.getByText('Connect to Server');
-      await user.click(connectButton);
+		await user.click(screen.getByRole('button', { name: /disconnect/i }));
 
-      await waitFor(() => {
-        expect(mockOnConnect).toHaveBeenCalledWith(
-          { url: 'http://test:3002', enabled: true },
-          undefined
-        );
-      });
-    });
-
-    it('should disable button when connecting', () => {
-      mockOnConnect.mockImplementation(() => new Promise(() => {})); // Never resolves
-
-      render(
-        <ConnectionDialog 
-          onConnect={mockOnConnect} 
-          onClose={mockOnClose}
-          isConnected={false}
-        />
-      );
-
-      const connectButton = screen.getByText('Connect to Server');
-      
-      // Just verify the button exists and can be disabled
-      expect(connectButton).toBeInTheDocument();
-    });
-  });
-
-  describe('offline mode', () => {
-    it('should call onConnect with disabled config', async () => {
-      const user = userEvent.setup();
-      render(
-        <ConnectionDialog 
-          onConnect={mockOnConnect} 
-          onClose={mockOnClose}
-          isConnected={false}
-        />
-      );
-
-      const offlineButton = screen.getByText('Work Offline');
-      await user.click(offlineButton);
-
-      expect(mockOnConnect).toHaveBeenCalled();
-      const callArgs = mockOnConnect.mock.calls[0];
-      expect(callArgs[0].enabled).toBe(false);
-    });
-
-    it('should save config to localStorage', async () => {
-      const user = userEvent.setup();
-      render(
-        <ConnectionDialog 
-          onConnect={mockOnConnect} 
-          onClose={mockOnClose}
-          isConnected={false}
-        />
-      );
-
-      const offlineButton = screen.getByText('Work Offline');
-      await user.click(offlineButton);
-
-      const saved = localStorage.getItem('excalidraw-server-config');
-      expect(saved).toBeTruthy();
-      const config = JSON.parse(saved!);
-      expect(config.enabled).toBe(false);
-    });
-  });
-
-  describe('connected state', () => {
-    it('should show switch room button when connected', () => {
-      render(
-        <ConnectionDialog 
-          onConnect={mockOnConnect} 
-          onClose={mockOnClose}
-          currentRoomId="room-123"
-          isConnected={true}
-        />
-      );
-
-      expect(screen.getByText('Switch Room')).toBeInTheDocument();
-      expect(screen.getByText('Close')).toBeInTheDocument();
-    });
-
-    it('should disable switch room when room ID is empty', () => {
-      render(
-        <ConnectionDialog 
-          onConnect={mockOnConnect} 
-          onClose={mockOnClose}
-          currentRoomId="room-123"
-          isConnected={true}
-        />
-      );
-
-      const switchButton = screen.getByText('Switch Room');
-      expect(switchButton).toBeDisabled();
-    });
-
-    it('should disable server URL input when connected', () => {
-      render(
-        <ConnectionDialog 
-          onConnect={mockOnConnect} 
-          onClose={mockOnClose}
-          currentRoomId="room-123"
-          isConnected={true}
-        />
-      );
-
-      const serverInput = screen.getByLabelText(/Server URL/i);
-      expect(serverInput).toBeDisabled();
-    });
-  });
-
-  describe('edge cases', () => {
-    it('should handle missing currentRoomId prop', () => {
-      render(
-        <ConnectionDialog 
-          onConnect={mockOnConnect} 
-          onClose={mockOnClose}
-          isConnected={false}
-        />
-      );
-
-      expect(screen.queryByText(/Current Room ID/i)).not.toBeInTheDocument();
-    });
-
-    it('should handle corrupted localStorage data', () => {
-      localStorage.setItem('excalidraw-server-config', '{invalid json}');
-
-      render(
-        <ConnectionDialog 
-          onConnect={mockOnConnect} 
-          onClose={mockOnClose}
-          isConnected={false}
-        />
-      );
-
-      // Should fallback to default URL
-      const serverInput = screen.getByLabelText(/Server URL/i) as HTMLInputElement;
-      expect(serverInput.value).toBe('http://localhost:3002');
-    });
-  });
-
-  describe('accessibility', () => {
-    it('should have proper labels for inputs', () => {
-      render(
-        <ConnectionDialog 
-          onConnect={mockOnConnect} 
-          onClose={mockOnClose}
-          isConnected={false}
-        />
-      );
-
-      expect(screen.getByLabelText(/Server URL/i)).toBeInTheDocument();
-      expect(screen.getByLabelText(/Room ID/i)).toBeInTheDocument();
-    });
-
-    it('should have proper button roles', () => {
-      render(
-        <ConnectionDialog 
-          onConnect={mockOnConnect} 
-          onClose={mockOnClose}
-          isConnected={false}
-        />
-      );
-
-      const buttons = screen.getAllByRole('button');
-      expect(buttons.length).toBeGreaterThan(0);
-    });
-
-    it('should show proper placeholder text', () => {
-      render(
-        <ConnectionDialog 
-          onConnect={mockOnConnect} 
-          onClose={mockOnClose}
-          isConnected={false}
-        />
-      );
-
-      expect(screen.getByPlaceholderText(/http:\/\/localhost:3002/i)).toBeInTheDocument();
-    });
-  });
+		expect(onDisconnect).toHaveBeenCalledWith('http://example.com');
+	});
 });
+

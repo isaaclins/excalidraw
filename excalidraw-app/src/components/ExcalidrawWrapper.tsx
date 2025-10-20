@@ -274,16 +274,13 @@ export function ExcalidrawWrapper({ serverConfig, onOpenSettings, onRoomIdChange
       }));
     
     if (elementsToSend.length > 0) {
-      void collab.broadcast({
+      collab.broadcast({
         elements: elementsToSend,
-      }, false).then(() => {
-        for (const element of elementsToSend) {
-          broadcastedElementVersions.current.set(element.id, element.version);
-        }
-        console.log('Broadcasted scene:', { elementCount: elementsToSend.length, syncAll });
-      }).catch((error: unknown) => {
-        console.error('Broadcast failed:', error);
-      });
+      }, false);
+      for (const element of elementsToSend) {
+        broadcastedElementVersions.current.set(element.id, element.version);
+      }
+      console.log('Broadcasted scene:', { elementCount: elementsToSend.length, syncAll });
     }
   };
 
@@ -419,20 +416,7 @@ export function ExcalidrawWrapper({ serverConfig, onOpenSettings, onRoomIdChange
         alert('Failed to connect to collaboration server. Working in local mode.');
       });
     } else if (serverConfig.enabled && !initialRoomId) {
-      // Generate new room ID and notify parent
-      const newRoomId = generateRoomId();
-      setCurrentRoomId(newRoomId);
-      onRoomIdChange(newRoomId);
-      
-      excalidrawAPI.connectToCollaboration(newRoomId).then(() => {
-        const collab = excalidrawAPI.getCollaborationClient();
-        if (collab) {
-          setupCollaboration(collab);
-        }
-      }).catch((error) => {
-        console.error('Failed to connect to collaboration:', error);
-        alert('Failed to connect to collaboration server. Working in local mode.');
-      });
+      setCurrentRoomId(null);
     } else if (!serverConfig.enabled) {
       // Generate local room ID for offline mode (for snapshots)
       const localRoomId = initialRoomId || generateRoomId();
@@ -696,7 +680,7 @@ export function ExcalidrawWrapper({ serverConfig, onOpenSettings, onRoomIdChange
         pointerType,
         senderId: userId,
       };
-      void collabClient.broadcast(payload, true, { userId });
+  collabClient.broadcast(payload, true);
       lastCursorPayload.current = null;
       lastCursorButton.current = null;
       lastCursorBroadcastTime.current = now;
@@ -728,7 +712,7 @@ export function ExcalidrawWrapper({ serverConfig, onOpenSettings, onRoomIdChange
       senderId: userId,
     };
 
-    void collabClient.broadcast(payload, true, { userId });
+  collabClient.broadcast(payload, true);
     lastCursorPayload.current = pointerPosition;
     lastCursorButton.current = pointerButton;
     lastCursorBroadcastTime.current = now;

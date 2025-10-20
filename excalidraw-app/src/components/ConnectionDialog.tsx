@@ -1,140 +1,271 @@
-import { useState } from 'react';
-import { getServerConfig, saveServerConfig, ServerConfig } from '../lib/api';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { ServerConfig } from '../lib/api';
 import './ConnectionDialog.css';
 
-interface ConnectionDialogProps {
-  onConnect: (config: ServerConfig, roomId?: string) => void;
-  onClose: () => void;
-  currentRoomId?: string;
-  isConnected?: boolean;
+interface RoomSummary {
+  id: string;
+  users: number;
 }
 
-export function ConnectionDialog({ onConnect, onClose, currentRoomId, isConnected }: ConnectionDialogProps) {
-  const [serverUrl, setServerUrl] = useState(() => getServerConfig().url);
-  const [roomId, setRoomId] = useState(currentRoomId || '');
-  const [isConnecting, setIsConnecting] = useState(false);
-  const [copied, setCopied] = useState(false);
+interface ConnectionDialogProps {
+  serverConfig: ServerConfig;
+  username: string;
+  onUsernameChange: (username: string) => void;
+  onServerConfigChange: (config: ServerConfig) => void;
+  onSelectRoom: (roomId: string, serverUrl: string) => void;
+  onDisconnect: (serverUrl: string) => void;
+  onClose: () => void;
+  currentRoomId?: string;
+}
 
-  const handleConnect = async () => {
-    setIsConnecting(true);
+const normalizeUrl = (value: string): string => {
+  if (!value) return '';
+  return value.replace(/\s+/g, '').replace(/\/+$/, '');
+};
+
+const createRoomIdFromUsername = (username: string): string => {
+  const base = username.trim() || 'Guest';
+  const sanitized = base
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '') || 'guest';
+  const suffix = Math.random().toString(36).slice(2, 8);
+  return `${sanitized}-s-room-${suffix}`;
+};
+
+export function ConnectionDialog({
+  serverConfig,
+  username,
+  onUsernameChange,
+  onServerConfigChange,
+  onSelectRoom,
+  onDisconnect,
+  onClose,
+  currentRoomId,
+}: ConnectionDialogProps) {
+  const storedUrl = useMemo(() => normalizeUrl(serverConfig.url), [serverConfig.url]);
+  const [serverUrlInput, setServerUrlInput] = useState('');
+  const [rooms, setRooms] = useState<RoomSummary[]>([]);
+  const [isFetchingRooms, setIsFetchingRooms] = useState(false);
+  const [roomsError, setRoomsError] = useState<string | null>(null);
+  const [lastFetchedUrl, setLastFetchedUrl] = useState<string>('');
+
+  const normalizedInputUrl = useMemo(() => normalizeUrl(serverUrlInput), [serverUrlInput]);
+  const effectiveServerUrl = normalizedInputUrl || storedUrl;
+  const hasEffectiveServerUrl = effectiveServerUrl.length > 0;
+  const usernameTrimmed = username.trim();
+  const activeRoomId = serverConfig.enabled ? currentRoomId ?? null : null;
+
+  useEffect(() => {
+    setServerUrlInput('');
+  }, [storedUrl]);
+
+  const fetchRooms = useCallback(async (
+    targetUrl: string,
+    options: { updateConfig: boolean; silent?: boolean } = { updateConfig: false }
+  ) => {
+    const { updateConfig, silent } = options;
+    if (!silent) {
+      setIsFetchingRooms(true);
+    }
+    setRoomsError(null);
+
     try {
-      const config: ServerConfig = {
-        url: serverUrl,
-        enabled: true,
-      };
-      saveServerConfig(config);
-      onConnect(config, roomId || undefined);
+      const response = await fetch(`${targetUrl}/api/rooms`);
+      if (!response.ok) {
+        throw new Error(`Server responded with ${response.status}`);
+      }
+
+      const data = (await response.json()) as Record<string, number>;
+      const list: RoomSummary[] = Object.entries(data).map(([id, users]) => ({
+        id,
+        users,
+      }));
+
+      setRooms(list);
+      setLastFetchedUrl(targetUrl);
+
+      if (updateConfig) {
+        const staysEnabled = serverConfig.enabled && storedUrl === targetUrl;
+        onServerConfigChange({ url: targetUrl, enabled: staysEnabled });
+      }
     } catch (error) {
-      console.error('Failed to connect:', error);
-      alert('Failed to connect to server');
+      console.error('Failed to load rooms:', error);
+      setRooms([]);
+      setRoomsError('Unable to load rooms from the collaboration server.');
     } finally {
-      setIsConnecting(false);
+      if (!options.silent) {
+        setIsFetchingRooms(false);
+      }
     }
+  }, [onServerConfigChange, serverConfig.enabled, storedUrl]);
+
+  useEffect(() => {
+    if (!storedUrl) {
+      setRooms([]);
+      setLastFetchedUrl('');
+      return;
+    }
+    void fetchRooms(storedUrl, { updateConfig: false, silent: true });
+  }, [storedUrl, fetchRooms]);
+
+  const handleConnectClick = async () => {
+    if (!hasEffectiveServerUrl) {
+      setRoomsError('Enter a server URL to connect.');
+      return;
+    }
+    await fetchRooms(effectiveServerUrl, { updateConfig: true });
   };
 
-  const handleOffline = () => {
-    const config: ServerConfig = {
-      url: serverUrl,
-      enabled: false,
-    };
-    saveServerConfig(config);
-    onConnect(config);
+  const handleDisconnectClick = () => {
+    const targetUrl = storedUrl || effectiveServerUrl;
+    if (targetUrl) {
+      onDisconnect(targetUrl);
+    }
+    setRooms([]);
+    setRoomsError(null);
+    setLastFetchedUrl('');
   };
 
-  const copyRoomId = async () => {
-    if (currentRoomId) {
-      await navigator.clipboard.writeText(currentRoomId);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+  const resolvedServerUrl = useMemo(() => {
+    return lastFetchedUrl || storedUrl || effectiveServerUrl;
+  }, [lastFetchedUrl, storedUrl, effectiveServerUrl]);
+
+  const handleRoomSelection = (roomId: string) => {
+    if (!resolvedServerUrl) {
+      setRoomsError('Connect to a server before selecting a room.');
+      return;
     }
+    onSelectRoom(roomId, resolvedServerUrl);
   };
+
+  const handleCreateRoom = () => {
+    if (!resolvedServerUrl) {
+      setRoomsError('Connect to a server before creating a room.');
+      return;
+    }
+    const newRoomId = createRoomIdFromUsername(usernameTrimmed);
+    onSelectRoom(newRoomId, resolvedServerUrl);
+  };
+
+  const isConnectedToRoom = Boolean(serverConfig.enabled && currentRoomId);
 
   return (
     <div className="connection-dialog-overlay" onClick={onClose}>
       <div className="connection-dialog" onClick={(e) => e.stopPropagation()}>
         <h2>Server Settings</h2>
         <p>Connect to a collaboration server or work offline</p>
-        
-        {isConnected && currentRoomId && (
+
+        {isConnectedToRoom && currentRoomId && (
           <div className="room-info">
             <div className="room-id-display">
               <label>Current Room ID:</label>
               <div className="room-id-box">
                 <code>{currentRoomId}</code>
-                <button 
-                  onClick={copyRoomId}
-                  className="btn-copy"
-                  title="Copy room ID"
-                >
-                  {copied ? '✓ Copied!' : '📋 Copy'}
-                </button>
               </div>
-              <small>Share this ID with friends to collaborate</small>
+              <small>Share this ID with collaborators or pick another room below.</small>
             </div>
           </div>
         )}
-        
+
+        <div className="input-group">
+          <label htmlFor="username">Username:</label>
+          <input
+            id="username"
+            type="text"
+            value={username}
+            onChange={(event) => onUsernameChange(event.target.value)}
+            placeholder="Choose a display name"
+          />
+        </div>
+
         <div className="input-group">
           <label htmlFor="server-url">Server URL:</label>
           <input
             id="server-url"
             type="text"
-            value={serverUrl}
-            onChange={(e) => setServerUrl(e.target.value)}
-            placeholder="http://localhost:3002"
-            disabled={isConnecting || isConnected}
+            value={serverUrlInput}
+            onChange={(event) => setServerUrlInput(event.target.value)}
+            disabled={isFetchingRooms}
           />
-        </div>
-
-        <div className="input-group">
-          <label htmlFor="room-id">
-            {isConnected ? 'Switch to Room ID:' : 'Room ID (leave blank for new room):'}
-          </label>
-          <input
-            id="room-id"
-            type="text"
-            value={roomId}
-            onChange={(e) => setRoomId(e.target.value)}
-            placeholder={isConnected ? 'Enter room ID to switch' : 'Enter room ID or leave blank'}
-            disabled={isConnecting}
-          />
+          {serverUrlInput.trim() === '' && storedUrl && (
+            <small className="input-hint">Currently using: {storedUrl}</small>
+          )}
         </div>
 
         <div className="button-group">
-          {!isConnected ? (
-            <>
-              <button
-                onClick={handleConnect}
-                disabled={isConnecting || !serverUrl}
-                className="btn-primary"
-              >
-                {isConnecting ? 'Connecting...' : 'Connect to Server'}
-              </button>
-              <button
-                onClick={handleOffline}
-                disabled={isConnecting}
-                className="btn-secondary"
-              >
-                Work Offline
-              </button>
-            </>
+          <button
+            onClick={handleConnectClick}
+            disabled={isFetchingRooms || !hasEffectiveServerUrl}
+            className="btn-primary"
+          >
+            {isFetchingRooms ? 'Connecting…' : 'Connect'}
+          </button>
+          <button
+            onClick={handleDisconnectClick}
+            disabled={!isConnectedToRoom && !storedUrl}
+            className="btn-secondary"
+          >
+            Disconnect
+          </button>
+          <button onClick={onClose} className="btn-secondary">
+            Close
+          </button>
+        </div>
+
+        <div className="rooms-section">
+          <div className="rooms-section-header">
+            <h3>Rooms on this server</h3>
+            <button
+              className="rooms-refresh"
+              onClick={() => {
+                if (!resolvedServerUrl) {
+                  setRoomsError('Connect to a server to refresh rooms.');
+                  return;
+                }
+                void fetchRooms(resolvedServerUrl, { updateConfig: false });
+              }}
+              disabled={!resolvedServerUrl || isFetchingRooms}
+            >
+              Refresh
+            </button>
+          </div>
+
+          {roomsError && <div className="rooms-error">{roomsError}</div>}
+
+          {isFetchingRooms && rooms.length === 0 ? (
+            <div className="rooms-loading">Loading rooms…</div>
+          ) : rooms.length === 0 ? (
+            <div className="rooms-empty">No active rooms yet.</div>
           ) : (
-            <>
-              <button
-                onClick={handleConnect}
-                disabled={isConnecting || !roomId || roomId === currentRoomId}
-                className="btn-primary"
-              >
-                Switch Room
-              </button>
-              <button
-                onClick={onClose}
-                className="btn-secondary"
-              >
-                Close
-              </button>
-            </>
+            <div className="rooms-list">
+              {rooms.map((room) => {
+                const isCurrent = activeRoomId === room.id;
+                return (
+                  <button
+                    key={room.id}
+                    className={`rooms-list-item ${isCurrent ? 'current' : ''}`}
+                    onClick={() => handleRoomSelection(room.id)}
+                  >
+                    <span className="room-name">{room.id}</span>
+                    <span className="room-users">👥 {room.users}</span>
+                    {isCurrent && <span className="room-status">Current</span>}
+                  </button>
+                );
+              })}
+            </div>
           )}
+
+          <div className="create-room">
+            <span className="create-room-label">or create a new room</span>
+            <button
+              className="btn-primary create-room-button"
+              onClick={handleCreateRoom}
+              disabled={!resolvedServerUrl}
+            >
+              Create “{usernameTrimmed || 'Guest'}'s Room”
+            </button>
+          </div>
         </div>
       </div>
     </div>
