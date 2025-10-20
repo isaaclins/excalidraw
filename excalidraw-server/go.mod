@@ -2,7 +2,7 @@ module excalidraw-server
 
 go 1.21
 
-toolchain go1.22.1
+toolchain go1.25.3
 
 require (
 	github.com/go-chi/chi/v5 v5.0.12
