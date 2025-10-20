@@ -313,7 +313,7 @@ func respondWithAck(socket *socketio.Socket, ack ackInvoker, event string, paylo
 	}
 }
 
-func parseBroadcastArgs(datas []any) (roomID string, payload any, metadata any, ack ackInvoker) {
+func parseBroadcastArgs(datas []any) (roomID string, payload, metadata any, ack ackInvoker) {
 	ack, args := extractAck(datas)
 	if len(args) < 3 {
 		return "", nil, nil, ack
