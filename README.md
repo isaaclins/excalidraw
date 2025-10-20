@@ -1,5 +1,6 @@
 # Excalidraw Client/Server
 
+version 1.0.0
 A self-hosted, privacy-focused Excalidraw setup with a Tauri desktop application and a minimal Go collaboration server.
 
 ## Features
