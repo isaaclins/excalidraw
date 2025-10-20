@@ -118,12 +118,12 @@ func SetupSocketIO() *socketio.Server {
 
 		//nolint:errcheck // Socket.IO event handlers do not return useful errors
 		socket.On("server-broadcast", func(datas ...any) {
-			handleBroadcast(socket, srv, datas, false)
+			handleBroadcast(socket, datas, false)
 		})
 
 		//nolint:errcheck // Socket.IO event handlers do not return useful errors
 		socket.On("server-volatile-broadcast", func(datas ...any) {
-			handleBroadcast(socket, srv, datas, true)
+			handleBroadcast(socket, datas, true)
 		})
 
 		socket.On("user-follow", func(datas ...any) {
@@ -168,7 +168,7 @@ func SetupSocketIO() *socketio.Server {
 	return srv
 }
 
-func handleBroadcast(socket *socketio.Socket, srv *socketio.Server, datas []any, volatile bool) {
+func handleBroadcast(socket *socketio.Socket, datas []any, volatile bool) {
 	roomID, payload, metadata, ack := parseBroadcastArgs(datas)
 	if roomID == "" {
 		err := fmt.Errorf("missing room id")
@@ -193,13 +193,13 @@ func handleBroadcast(socket *socketio.Socket, srv *socketio.Server, datas []any,
 	respondWithAck(socket, ack, "broadcast-ack", makeBroadcastAckPayload(payload, nil), nil)
 }
 
-func extractAck(datas []any) (ackInvoker, []any) {
+func extractAck(datas []any) (ack ackInvoker, args []any) {
 	if len(datas) == 0 {
 		return nil, datas
 	}
 
 	candidate := datas[len(datas)-1]
-	ack := wrapAck(candidate)
+	ack = wrapAck(candidate)
 	if ack == nil {
 		return nil, datas
 	}
@@ -313,15 +313,15 @@ func respondWithAck(socket *socketio.Socket, ack ackInvoker, event string, paylo
 	}
 }
 
-func parseBroadcastArgs(datas []any) (string, any, any, ackInvoker) {
+func parseBroadcastArgs(datas []any) (roomID string, payload any, metadata any, ack ackInvoker) {
 	ack, args := extractAck(datas)
 	if len(args) < 3 {
 		return "", nil, nil, ack
 	}
 
-	roomID, _ := args[0].(string)
-	payload := args[1]
-	metadata := args[2]
+	roomID, _ = args[0].(string)
+	payload = args[1]
+	metadata = args[2]
 	return roomID, payload, metadata, ack
 }
 
@@ -343,11 +343,14 @@ func makeBroadcastAckPayload(original any, ackErr error) map[string]any {
 }
 
 func extractMessageID(original any) string {
-	switch value := original.(type) {
-	case map[string]interface{}:
-		if id, ok := value["__collabMessageId"].(string); ok {
-			return id
-		}
+	value, ok := original.(map[string]any)
+	if !ok {
+		return ""
 	}
+
+	if id, exists := value["__collabMessageId"].(string); exists {
+		return id
+	}
+
 	return ""
 }
