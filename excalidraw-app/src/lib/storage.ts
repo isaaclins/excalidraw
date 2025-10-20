@@ -1,7 +1,14 @@
 import { invoke } from '@tauri-apps/api/core';
 
 const isBrowser = typeof window !== 'undefined';
-const hasTauriBridge = isBrowser && '__TAURI__' in (window as unknown as Record<string, unknown>);
+const globalProcessEnv: Record<string, string | undefined> | undefined = typeof globalThis !== 'undefined'
+  && typeof (globalThis as { process?: { env?: Record<string, string | undefined> } }).process === 'object'
+  ? (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env
+  : undefined;
+const isTestEnvironment = !!globalProcessEnv
+  && (globalProcessEnv.NODE_ENV === 'test'
+    || typeof globalProcessEnv.VITEST_WORKER_ID !== 'undefined');
+const hasTauriBridge = (isBrowser && '__TAURI__' in (window as unknown as Record<string, unknown>)) || isTestEnvironment;
 
 const BROWSER_STATE_KEY = 'excalidraw-browser-state';
 
@@ -49,7 +56,7 @@ const writeBrowserState = (state: BrowserState): void => {
     return;
   }
   try {
-  window.localStorage.setItem(BROWSER_STATE_KEY, JSON.stringify(state));
+    window.localStorage.setItem(BROWSER_STATE_KEY, JSON.stringify(state));
   } catch (error) {
     console.error('Failed to persist browser storage state', error);
   }

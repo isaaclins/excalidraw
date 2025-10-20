@@ -50,9 +50,13 @@ describe('CollaborationClient', () => {
       });
 
       await expect(client.connect()).resolves.toBeUndefined();
-      expect(io).toHaveBeenCalledWith('http://localhost:3002', {
-        transports: ['websocket', 'polling'],
-      });
+      expect(io).toHaveBeenCalledWith(
+        'http://localhost:3002',
+        expect.objectContaining({
+          transports: ['websocket', 'polling'],
+          withCredentials: true,
+        })
+      );
     });
 
     it('should handle network timeout', async () => {

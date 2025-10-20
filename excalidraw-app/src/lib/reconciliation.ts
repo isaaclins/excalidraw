@@ -63,10 +63,13 @@ const shouldDiscardRemoteElement = (
   const localNonce = isFiniteNumber(local.versionNonce) ? local.versionNonce : null;
   const remoteNonce = isFiniteNumber(remote.versionNonce) ? remote.versionNonce : null;
 
-  // When versions match, treat higher nonce as the newer change. Only keep the
-  // local copy if it is newer than the remote payload.
+  // When versions match, treat lower nonce as the newer change. Only keep the
+  // local copy if its nonce wins the tiebreaker against the remote payload.
   if (localNonce !== null && remoteNonce !== null) {
-    return localNonce > remoteNonce;
+    if (localNonce === remoteNonce) {
+      return true;
+    }
+    return localNonce < remoteNonce;
   }
 
   // If only one side has a nonce, prefer the one that has it (assumed newer).
