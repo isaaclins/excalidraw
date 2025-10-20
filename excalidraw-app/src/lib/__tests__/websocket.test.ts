@@ -14,8 +14,11 @@ describe('CollaborationClient', () => {
       connected: false,
       id: 'test-socket-id',
       on: vi.fn(),
+      once: vi.fn(),
+      off: vi.fn(),
       emit: vi.fn(),
       disconnect: vi.fn(),
+      timeout: vi.fn().mockReturnThis(),
     };
 
     (io as any).mockReturnValue(mockSocket);
@@ -67,24 +70,24 @@ describe('CollaborationClient', () => {
 
   describe('joinRoom', () => {
     it('should throw error when not connected', () => {
-      expect(() => client.joinRoom('room-123')).toThrow('Not connected to server');
+      return expect(client.joinRoom('room-123')).rejects.toThrow('Not connected to server');
     });
 
     it('should handle empty room ID when trying to join', () => {
-      expect(() => client.joinRoom('')).toThrow('Not connected to server');
+      return expect(client.joinRoom('')).rejects.toThrow('Not connected to server');
     });
   });
 
   describe('broadcast', () => {
     it('should not broadcast when not connected', () => {
       mockSocket.connected = false;
-      client.broadcast({ data: 'test' });
+      return expect(client.broadcast({ data: 'test' })).resolves.toBeUndefined();
       expect(mockSocket.emit).not.toHaveBeenCalled();
     });
 
     it('should handle null data', () => {
       mockSocket.connected = false;
-      client.broadcast(null);
+      return expect(client.broadcast(null)).resolves.toBeUndefined();
       expect(mockSocket.emit).not.toHaveBeenCalled();
     });
   });

@@ -41,6 +41,8 @@ export function ExcalidrawWrapper({ serverConfig, onOpenSettings, onRoomIdChange
   const autoSnapshotManager = useRef<AutoSnapshotManager | null>(null);
   const [snapshotStorage, setSnapshotStorage] = useState<typeof localStorageAPI | ServerStorage>(localStorageAPI);
   const lastBroadcastTime = useRef<number>(0);
+  const pendingBroadcastTimeout = useRef<number | null>(null);
+  const pendingBroadcastVersion = useRef<number | null>(null);
   const broadcastThrottleMs = 50; // Throttle broadcasts to max 20 per second
   const isApplyingRemoteUpdate = useRef<boolean>(false);
 
@@ -50,6 +52,19 @@ export function ExcalidrawWrapper({ serverConfig, onOpenSettings, onRoomIdChange
 
   const broadcastScene = (collab: ReturnType<ExcalidrawAPI['getCollaborationClient']>, allElements: readonly ExcalidrawElement[], syncAll: boolean = false) => {
     if (!collab) return;
+    const precedingMap = new Map<string, string>();
+    let previousId: string | null = null;
+    for (const element of allElements) {
+      if (!element?.id) {
+        continue;
+      }
+      if (!previousId) {
+        precedingMap.set(element.id, "^");
+      } else {
+        precedingMap.set(element.id, previousId);
+      }
+      previousId = element.id;
+    }
     // Filter elements that need to be sent
     const filteredElements = allElements.filter((element) => {
       return (
@@ -61,22 +76,22 @@ export function ExcalidrawWrapper({ serverConfig, onOpenSettings, onRoomIdChange
     
     // Add z-index information for proper element ordering
     const elementsToSend: BroadcastedExcalidrawElement[] = filteredElements
-      .map((element, idx, arr) => ({
+      .map((element) => ({
         ...element,
-        [PRECEDING_ELEMENT_KEY]: idx === 0 ? "^" : arr[idx - 1]?.id,
+        [PRECEDING_ELEMENT_KEY]: precedingMap.get(element.id) ?? "^",
       }));
     
     if (elementsToSend.length > 0) {
-      // Update broadcasted versions
-      for (const element of elementsToSend) {
-        broadcastedElementVersions.current.set(element.id, element.version);
-      }
-      
-      collab.broadcast({
+      void collab.broadcast({
         elements: elementsToSend,
-      }, false); // non-volatile for full scene updates
-      
-      console.log('Broadcasted scene:', { elementCount: elementsToSend.length, syncAll });
+      }, false).then(() => {
+        for (const element of elementsToSend) {
+          broadcastedElementVersions.current.set(element.id, element.version);
+        }
+        console.log('Broadcasted scene:', { elementCount: elementsToSend.length, syncAll });
+      }).catch((error: unknown) => {
+        console.error('Broadcast failed:', error);
+      });
     }
   };
 
@@ -103,6 +118,13 @@ export function ExcalidrawWrapper({ serverConfig, onOpenSettings, onRoomIdChange
         excalidrawRef.current.updateScene({
           elements: reconciledElements,
         });
+
+        lastBroadcastedOrReceivedSceneVersion.current = getSceneVersion(reconciledElements);
+        pendingBroadcastVersion.current = null;
+        if (pendingBroadcastTimeout.current !== null) {
+          clearTimeout(pendingBroadcastTimeout.current);
+          pendingBroadcastTimeout.current = null;
+        }
         
         // Clear flag after a short delay to allow onChange to process
         setTimeout(() => {
@@ -149,6 +171,14 @@ export function ExcalidrawWrapper({ serverConfig, onOpenSettings, onRoomIdChange
   /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     const excalidrawAPI = new ExcalidrawAPI(serverConfig);
+    broadcastedElementVersions.current.clear();
+    lastBroadcastedOrReceivedSceneVersion.current = -1;
+  lastBroadcastTime.current = 0;
+    pendingBroadcastVersion.current = null;
+    if (pendingBroadcastTimeout.current !== null) {
+      clearTimeout(pendingBroadcastTimeout.current);
+      pendingBroadcastTimeout.current = null;
+    }
     setApi(excalidrawAPI);
 
     // Set up snapshot storage based on server config
@@ -202,6 +232,11 @@ export function ExcalidrawWrapper({ serverConfig, onOpenSettings, onRoomIdChange
       if (autoSnapshotManager.current) {
         autoSnapshotManager.current.stop();
       }
+      if (pendingBroadcastTimeout.current !== null) {
+        clearTimeout(pendingBroadcastTimeout.current);
+        pendingBroadcastTimeout.current = null;
+      }
+      pendingBroadcastVersion.current = null;
     };
   }, [serverConfig, initialRoomId, onRoomIdChange, setupCollaboration]);
   /* eslint-enable react-hooks/set-state-in-effect */
@@ -283,6 +318,15 @@ export function ExcalidrawWrapper({ serverConfig, onOpenSettings, onRoomIdChange
       // Disconnect from current room
       api.disconnect();
       
+      broadcastedElementVersions.current.clear();
+      lastBroadcastedOrReceivedSceneVersion.current = -1;
+  lastBroadcastTime.current = 0;
+      pendingBroadcastVersion.current = null;
+      if (pendingBroadcastTimeout.current !== null) {
+        clearTimeout(pendingBroadcastTimeout.current);
+        pendingBroadcastTimeout.current = null;
+      }
+
       // Update room ID
       setCurrentRoomId(roomId);
       onRoomIdChange(roomId);
@@ -334,21 +378,60 @@ export function ExcalidrawWrapper({ serverConfig, onOpenSettings, onRoomIdChange
 
     // Broadcast changes if collaboration is enabled
     if (api?.isEnabled() && api.getCollaborationClient()?.isConnected()) {
-      // Don't broadcast if we're applying a remote update
       if (isApplyingRemoteUpdate.current) {
         return;
       }
 
       const currentVersion = getSceneVersion(elements);
       const now = Date.now();
-      
-      // Only broadcast if this is a new version
-      // AND we haven't broadcast too recently (throttle)
-      if (currentVersion > lastBroadcastedOrReceivedSceneVersion.current &&
-          (now - lastBroadcastTime.current) >= broadcastThrottleMs) {
-        broadcastScene(api.getCollaborationClient(), elements, false);
-        lastBroadcastedOrReceivedSceneVersion.current = currentVersion;
-        lastBroadcastTime.current = now;
+
+      if (currentVersion > lastBroadcastedOrReceivedSceneVersion.current) {
+        const elapsed = now - lastBroadcastTime.current;
+        const canBroadcastNow = elapsed >= broadcastThrottleMs;
+
+        const flushPending = () => {
+          const collabClient = api.getCollaborationClient();
+          if (!collabClient?.isConnected()) {
+            return;
+          }
+          const latestElements = excalidrawRef.current?.getSceneElementsIncludingDeleted() ?? elements;
+          const latestVersion = getSceneVersion(latestElements);
+          if (latestVersion <= lastBroadcastedOrReceivedSceneVersion.current) {
+            pendingBroadcastVersion.current = null;
+            return;
+          }
+          broadcastScene(collabClient, latestElements, false);
+          lastBroadcastedOrReceivedSceneVersion.current = latestVersion;
+          lastBroadcastTime.current = Date.now();
+          pendingBroadcastVersion.current = null;
+        };
+
+        if (canBroadcastNow) {
+          if (pendingBroadcastTimeout.current !== null) {
+            clearTimeout(pendingBroadcastTimeout.current);
+            pendingBroadcastTimeout.current = null;
+          }
+          pendingBroadcastVersion.current = null;
+          const collabClient = api.getCollaborationClient();
+          if (collabClient?.isConnected()) {
+            broadcastScene(collabClient, elements, false);
+            lastBroadcastedOrReceivedSceneVersion.current = currentVersion;
+            lastBroadcastTime.current = now;
+          }
+        } else {
+          pendingBroadcastVersion.current = currentVersion;
+          if (pendingBroadcastTimeout.current !== null) {
+            clearTimeout(pendingBroadcastTimeout.current);
+          }
+          const delay = Math.max(0, broadcastThrottleMs - elapsed);
+          pendingBroadcastTimeout.current = setTimeout(() => {
+            pendingBroadcastTimeout.current = null;
+            if (pendingBroadcastVersion.current === null) {
+              return;
+            }
+            flushPending();
+          }, delay);
+        }
       }
     }
   };

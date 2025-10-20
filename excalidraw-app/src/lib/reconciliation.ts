@@ -28,26 +28,52 @@ interface AppState {
   draggingElement?: { id: string } | null;
 }
 
+const isFiniteNumber = (value: unknown): value is number =>
+  typeof value === "number" && Number.isFinite(value);
+
 const shouldDiscardRemoteElement = (
   localAppState: AppState,
   local: ExcalidrawElement | undefined,
   remote: BroadcastedExcalidrawElement,
 ): boolean => {
+  if (!local) {
+    return false;
+  }
+
+  // Never override an element the local user is actively manipulating.
   if (
-    local &&
-    // local element is being edited
-    (local.id === localAppState.editingElement?.id ||
-      local.id === localAppState.resizingElement?.id ||
-      local.id === localAppState.draggingElement?.id ||
-      // local element is newer
-      local.version > remote.version ||
-      // resolve conflicting edits deterministically by taking the one with
-      // the lowest versionNonce
-      (local.version === remote.version &&
-        local.versionNonce < remote.versionNonce))
+    local.id === localAppState.editingElement?.id ||
+    local.id === localAppState.resizingElement?.id ||
+    local.id === localAppState.draggingElement?.id
   ) {
     return true;
   }
+
+  const localVersion = isFiniteNumber(local.version) ? local.version : -1;
+  const remoteVersion = isFiniteNumber(remote.version) ? remote.version : -1;
+
+  if (localVersion > remoteVersion) {
+    return true;
+  }
+
+  if (localVersion < remoteVersion) {
+    return false;
+  }
+
+  const localNonce = isFiniteNumber(local.versionNonce) ? local.versionNonce : null;
+  const remoteNonce = isFiniteNumber(remote.versionNonce) ? remote.versionNonce : null;
+
+  // When versions match, treat higher nonce as the newer change. Only keep the
+  // local copy if it is newer than the remote payload.
+  if (localNonce !== null && remoteNonce !== null) {
+    return localNonce > remoteNonce;
+  }
+
+  // If only one side has a nonce, prefer the one that has it (assumed newer).
+  if (localNonce !== null && remoteNonce === null) {
+    return true;
+  }
+
   return false;
 };
 
