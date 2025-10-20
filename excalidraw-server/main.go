@@ -10,6 +10,7 @@ import (
 	"flag"
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"syscall"
@@ -26,13 +27,37 @@ func setupRouter(documentStore core.DocumentStore) *chi.Mux {
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
 
-	r.Use(cors.Handler(cors.Options{
-		AllowedOrigins:   []string{"http://localhost:*", "tauri://localhost"},
+	corsOptions := cors.Options{
+		AllowedOrigins: []string{"tauri://localhost"},
+		AllowOriginFunc: func(r *http.Request, origin string) bool {
+			if origin == "" {
+				return false
+			}
+
+			parsed, err := url.Parse(origin)
+			if err != nil {
+				return false
+			}
+
+			switch parsed.Scheme {
+			case "http", "https":
+				switch parsed.Hostname() {
+				case "localhost", "127.0.0.1", "[::1]":
+					return true
+				}
+			case "tauri":
+				return parsed.Hostname() == "localhost"
+			}
+
+			return false
+		},
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "Content-Length"},
 		AllowCredentials: true,
 		MaxAge:           300,
-	}))
+	}
+
+	r.Use(cors.Handler(corsOptions))
 
 	r.Route("/api/v2", func(r chi.Router) {
 		r.Post("/post/", documents.HandleCreate(documentStore))

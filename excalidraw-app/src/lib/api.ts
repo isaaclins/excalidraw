@@ -24,7 +24,7 @@ export class ExcalidrawAPI {
       throw new Error('Collaboration not configured');
     }
     await this.collaboration.connect();
-    this.collaboration.joinRoom(roomId);
+    await this.collaboration.joinRoom(roomId);
   }
 
   getCollaborationClient(): CollaborationClient | null {
