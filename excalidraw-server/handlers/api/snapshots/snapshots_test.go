@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/go-chi/chi/v5"
@@ -16,6 +17,7 @@ import (
 
 // Mock snapshot store for testing
 type mockSnapshotStore struct {
+	mu            sync.RWMutex
 	snapshots     map[string]*sqlite.Snapshot
 	roomSnapshots map[string][]string // roomID -> []snapshotIDs
 	roomSettings  map[string]*sqlite.RoomSettings
@@ -36,6 +38,9 @@ func newMockSnapshotStore() *mockSnapshotStore {
 }
 
 func (m *mockSnapshotStore) CreateSnapshot(ctx context.Context, roomID, name, description, thumbnail, createdBy string, data []byte) (string, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	if m.createErr != nil {
 		return "", m.createErr
 	}
@@ -56,6 +61,9 @@ func (m *mockSnapshotStore) CreateSnapshot(ctx context.Context, roomID, name, de
 }
 
 func (m *mockSnapshotStore) ListSnapshots(ctx context.Context, roomID string) ([]sqlite.Snapshot, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
 	if m.listErr != nil {
 		return nil, m.listErr
 	}
@@ -73,6 +81,9 @@ func (m *mockSnapshotStore) ListSnapshots(ctx context.Context, roomID string) ([
 }
 
 func (m *mockSnapshotStore) GetSnapshot(ctx context.Context, id string) (*sqlite.Snapshot, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
 	if m.getErr != nil {
 		return nil, m.getErr
 	}
@@ -84,6 +95,9 @@ func (m *mockSnapshotStore) GetSnapshot(ctx context.Context, id string) (*sqlite
 }
 
 func (m *mockSnapshotStore) DeleteSnapshot(ctx context.Context, id string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	if m.deleteErr != nil {
 		return m.deleteErr
 	}
@@ -105,6 +119,9 @@ func (m *mockSnapshotStore) DeleteSnapshot(ctx context.Context, id string) error
 }
 
 func (m *mockSnapshotStore) UpdateSnapshotMetadata(ctx context.Context, id, name, description string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	if m.updateErr != nil {
 		return m.updateErr
 	}
@@ -118,22 +135,30 @@ func (m *mockSnapshotStore) UpdateSnapshotMetadata(ctx context.Context, id, name
 }
 
 func (m *mockSnapshotStore) GetRoomSettings(ctx context.Context, roomID string) (*sqlite.RoomSettings, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
 	if m.settingsErr != nil {
 		return nil, m.settingsErr
 	}
 	settings, exists := m.roomSettings[roomID]
 	if !exists {
 		// Return defaults
-		return &sqlite.RoomSettings{
+		defaultSettings := &sqlite.RoomSettings{
 			RoomID:           roomID,
 			MaxSnapshots:     10,
 			AutoSaveInterval: 300,
-		}, nil
+		}
+		return defaultSettings, nil
 	}
-	return settings, nil
+	settingsCopy := *settings
+	return &settingsCopy, nil
 }
 
 func (m *mockSnapshotStore) UpdateRoomSettings(ctx context.Context, roomID string, maxSnapshots, autoSaveInterval int) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
 	if m.settingsErr != nil {
 		return m.settingsErr
 	}
