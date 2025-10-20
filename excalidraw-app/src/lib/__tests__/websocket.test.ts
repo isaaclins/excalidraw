@@ -74,24 +74,24 @@ describe('CollaborationClient', () => {
 
   describe('joinRoom', () => {
     it('should throw error when not connected', () => {
-      return expect(client.joinRoom('room-123')).rejects.toThrow('Not connected to server');
+      expect(() => client.joinRoom('room-123')).toThrow('Not connected to server');
     });
 
     it('should handle empty room ID when trying to join', () => {
-      return expect(client.joinRoom('')).rejects.toThrow('Not connected to server');
+      expect(() => client.joinRoom('')).toThrow('Not connected to server');
     });
   });
 
   describe('broadcast', () => {
     it('should not broadcast when not connected', () => {
       mockSocket.connected = false;
-      return expect(client.broadcast({ data: 'test' })).resolves.toBeUndefined();
+      expect(() => client.broadcast({ data: 'test' })).not.toThrow();
       expect(mockSocket.emit).not.toHaveBeenCalled();
     });
 
     it('should handle null data', () => {
       mockSocket.connected = false;
-      return expect(client.broadcast(null)).resolves.toBeUndefined();
+      expect(() => client.broadcast(null as unknown as Record<string, unknown>)).not.toThrow();
       expect(mockSocket.emit).not.toHaveBeenCalled();
     });
   });

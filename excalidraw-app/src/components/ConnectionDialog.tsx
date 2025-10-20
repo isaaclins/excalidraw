@@ -131,6 +131,26 @@ export function ConnectionDialog({
     return lastFetchedUrl || storedUrl || effectiveServerUrl;
   }, [lastFetchedUrl, storedUrl, effectiveServerUrl]);
 
+  const isConnectedToRoom = Boolean(serverConfig.enabled && currentRoomId);
+
+  const toggleButtonLabel = isConnectedToRoom
+    ? 'Disconnect'
+    : isFetchingRooms
+    ? 'Connecting…'
+    : 'Connect';
+
+  const toggleButtonDisabled = isConnectedToRoom
+    ? false
+    : !hasEffectiveServerUrl || isFetchingRooms;
+
+  const handleToggleClick = () => {
+    if (isConnectedToRoom) {
+      handleDisconnectClick();
+    } else {
+      void handleConnectClick();
+    }
+  };
+
   const handleRoomSelection = (roomId: string) => {
     if (!resolvedServerUrl) {
       setRoomsError('Connect to a server before selecting a room.');
@@ -147,8 +167,6 @@ export function ConnectionDialog({
     const newRoomId = createRoomIdFromUsername(usernameTrimmed);
     onSelectRoom(newRoomId, resolvedServerUrl);
   };
-
-  const isConnectedToRoom = Boolean(serverConfig.enabled && currentRoomId);
 
   return (
     <div className="connection-dialog-overlay" onClick={onClose}>
@@ -195,18 +213,11 @@ export function ConnectionDialog({
 
         <div className="button-group">
           <button
-            onClick={handleConnectClick}
-            disabled={isFetchingRooms || !hasEffectiveServerUrl}
-            className="btn-primary"
+            onClick={handleToggleClick}
+            disabled={toggleButtonDisabled}
+            className={isConnectedToRoom ? 'btn-secondary' : 'btn-primary'}
           >
-            {isFetchingRooms ? 'Connecting…' : 'Connect'}
-          </button>
-          <button
-            onClick={handleDisconnectClick}
-            disabled={!isConnectedToRoom && !storedUrl}
-            className="btn-secondary"
-          >
-            Disconnect
+            {toggleButtonLabel}
           </button>
           <button onClick={onClose} className="btn-secondary">
             Close

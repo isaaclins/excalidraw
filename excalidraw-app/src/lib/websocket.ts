@@ -27,6 +27,7 @@ export class CollaborationClient {
 
       this.socket = io(this.serverUrl, {
         transports: ['websocket', 'polling'],
+        withCredentials: true,
       });
 
       this.socket.on('connect', () => {
