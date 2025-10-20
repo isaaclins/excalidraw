@@ -4856,11 +4856,6 @@ array.prototype.tosorted@^1.1.1:
     es-shim-unscopables "^1.0.0"
     get-intrinsic "^1.1.3"
 
-assertion-error@^1.1.0:
-  version "1.1.0"
-  resolved "https://registry.yarnpkg.com/assertion-error/-/assertion-error-1.1.0.tgz#e60b6b0e8f301bd97e5375215bda406c85118c0b"
-  integrity sha512-jgsaNduz+ndvGyFt3uSuWqvy4lCnIJiovtouQN5JZHOKCS2QuhEdbcQHFhVksz2N2U9hXJo8odG7ETyWlEeuDw==
-
 assertion-error@^2.0.1:
   version "2.0.1"
   resolved "https://registry.yarnpkg.com/assertion-error/-/assertion-error-2.0.1.tgz#f641a196b335690b1070bf00b6e7593fec190bf7"
@@ -5299,18 +5294,10 @@ canvas-roundrect-polyfill@0.0.1:
   resolved "https://registry.yarnpkg.com/canvas-roundrect-polyfill/-/canvas-roundrect-polyfill-0.0.1.tgz#70bf107ebe2037f26d839d7f809a26f4a95f5696"
   integrity sha512-yWq+R3U3jE+coOeEb3a3GgE2j/0MMiDKM/QpLb6h9ihf5fGY9UXtvK9o4vNqjWXoZz7/3EaSVU3IX53TvFFUOw==
 
-chai@4.3.6:
-  version "4.3.6"
-  resolved "https://registry.yarnpkg.com/chai/-/chai-4.3.6.tgz#ffe4ba2d9fa9d6680cc0b370adae709ec9011e9c"
-  integrity sha512-bbcp3YfHCUzMOvKqsztczerVgBKSsEijCySNlHHbX3VG1nskvqjz5Rfso1gGwD6w6oOV3eI60pKuMOV5MV7p3Q==
-  dependencies:
-    assertion-error "^1.1.0"
-    check-error "^1.0.2"
-    deep-eql "^3.0.1"
-    get-func-name "^2.0.0"
-    loupe "^2.3.1"
-    pathval "^1.1.1"
-    type-detect "^4.0.5"
+chai@6.2.0:
+  version "6.2.0"
+  resolved "https://registry.yarnpkg.com/chai/-/chai-6.2.0.tgz#181bca6a219cddb99c3eeefb82483800ffa550ce"
+  integrity sha512-aUTnJc/JipRzJrNADXVvpVqi6CO0dn3nx4EVPxijri+fj3LUUDyZQOgVeW54Ob3Y1Xh9Iz8f+CgaCl8v0mn9bA==
 
 chai@^5.2.0:
   version "5.3.3"
@@ -5355,11 +5342,6 @@ character-entities@^2.0.0:
   version "2.0.2"
   resolved "https://registry.yarnpkg.com/character-entities/-/character-entities-2.0.2.tgz#2d09c2e72cd9523076ccb21157dff66ad43fcc22"
   integrity sha512-shx7oQ0Awen/BRIdkjkvz54PnEEI/EjwXDSIZp86/KKdbafHh1Df/RYGBhn4hbe2+uKC9FnT5UCEdyPz3ai9hQ==
-
-check-error@^1.0.2:
-  version "1.0.2"
-  resolved "https://registry.yarnpkg.com/check-error/-/check-error-1.0.2.tgz#574d312edd88bb5dd8912e9286dd6c0aed4aac82"
-  integrity sha512-BrgHpW9NURQgzoNyjfq0Wu6VFO6D7IZEmJNdtgNqpzGG8RuNFHt2jQxWlAs4HMe119chBnv+34syEZtc6IhLtA==
 
 check-error@^2.1.1:
   version "2.1.1"
@@ -6032,13 +6014,6 @@ decode-named-character-reference@^1.0.0:
   integrity sha512-O8x12RzrUF8xyVcY0KJowWsmaJxQbmy0/EtnNtHRpsOcT7dFk5W598coHqBVpmWo1oQQfsCqfCmkZN5DJrZVdg==
   dependencies:
     character-entities "^2.0.0"
-
-deep-eql@^3.0.1:
-  version "3.0.1"
-  resolved "https://registry.yarnpkg.com/deep-eql/-/deep-eql-3.0.1.tgz#dfc9404400ad1c8fe023e7da1df1c147c4b444df"
-  integrity sha512-+QeIQyN5ZuO+3Uk5DYh6/1eKO0m0YmJFGNmFHGACpf1ClL1nmlV/p4gNgbl2pJGxgXb4faqo6UE+M5ACEMyVcw==
-  dependencies:
-    type-detect "^4.0.0"
 
 deep-eql@^5.0.1:
   version "5.0.2"
@@ -7105,11 +7080,6 @@ get-east-asian-width@^1.0.0, get-east-asian-width@^1.3.0, get-east-asian-width@^
   version "1.4.0"
   resolved "https://registry.yarnpkg.com/get-east-asian-width/-/get-east-asian-width-1.4.0.tgz#9bc4caa131702b4b61729cb7e42735bc550c9ee6"
   integrity sha512-QZjmEOC+IT1uk6Rx0sX22V6uHWVwbdbxf1faPqJ1QhLdGgsRGCZoyaQBm/piRdJy/D2um6hM1UP7ZEeQ4EkP+Q==
-
-get-func-name@^2.0.0:
-  version "2.0.0"
-  resolved "https://registry.yarnpkg.com/get-func-name/-/get-func-name-2.0.0.tgz#ead774abee72e20409433a066366023dd6887a41"
-  integrity sha512-Hm0ixYtaSZ/V7C8FJrtZIuBBI+iSgL+1Aq82zSu8VQNB4S3Gk8e7Qs3VwBDJAhmRZcFqkl3tQu36g/Foh5I5ig==
 
 get-intrinsic@^1.0.2, get-intrinsic@^1.1.1, get-intrinsic@^1.1.3, get-intrinsic@^1.2.0:
   version "1.2.0"
@@ -8207,13 +8177,6 @@ loose-envify@^1.0.0, loose-envify@^1.1.0, loose-envify@^1.4.0:
   dependencies:
     js-tokens "^3.0.0 || ^4.0.0"
 
-loupe@^2.3.1:
-  version "2.3.6"
-  resolved "https://registry.yarnpkg.com/loupe/-/loupe-2.3.6.tgz#76e4af498103c532d1ecc9be102036a21f787b53"
-  integrity sha512-RaPMZKiMy8/JruncMU5Bt6na1eftNoo++R4Y+N2FrxkDVTrGvcyzFTsaGif4QTeKESheMGegbhw6iUAq+5A8zA==
-  dependencies:
-    get-func-name "^2.0.0"
-
 loupe@^3.1.0, loupe@^3.1.4:
   version "3.2.1"
   resolved "https://registry.yarnpkg.com/loupe/-/loupe-3.2.1.tgz#0095cf56dc5b7a9a7c08ff5b1a8796ec8ad17e76"
@@ -9034,11 +8997,6 @@ pathe@^2.0.3:
   version "2.0.3"
   resolved "https://registry.yarnpkg.com/pathe/-/pathe-2.0.3.tgz#3ecbec55421685b70a9da872b2cff3e1cbed1716"
   integrity sha512-WUjGcAqP1gQacoQe+OBJsFA7Ld4DyXuUIjZ5cc75cLHvJ7dtNsTugphxIADwspS+AraAUePCKrSVtPLFj/F88w==
-
-pathval@^1.1.1:
-  version "1.1.1"
-  resolved "https://registry.yarnpkg.com/pathval/-/pathval-1.1.1.tgz#8534e77a77ce7ac5a2512ea21e0fdb8fcf6c3d8d"
-  integrity sha512-Dp6zGqpTdETdR63lehJYPeIOqpiNBNtc7BpWSLrOje7UaIsE5aY92r/AunQA7rsXvet3lrJ3JnZX29UPTKXyKQ==
 
 pathval@^2.0.0:
   version "2.0.1"
@@ -10605,11 +10563,6 @@ type-check@^0.4.0, type-check@~0.4.0:
   integrity sha512-XleUoc9uwGXqjWwXaUTZAmzMcFZ5858QA2vvx1Ur5xIcixXIP+8LnFDgRplU30us6teqdlskFfu+ae4K79Ooew==
   dependencies:
     prelude-ls "^1.2.1"
-
-type-detect@^4.0.0, type-detect@^4.0.5:
-  version "4.0.8"
-  resolved "https://registry.yarnpkg.com/type-detect/-/type-detect-4.0.8.tgz#7646fb5f18871cfbb7749e69bd39a6388eb7450c"
-  integrity sha512-0fr/mIH1dlO+x7TlcMy+bIDqKPsw/70tVyeHW787goQjhmqaZe10uwLujubK9q9Lg6Fiho1KUKDYz0Z7k7g5/g==
 
 type-fest@^0.16.0:
   version "0.16.0"
