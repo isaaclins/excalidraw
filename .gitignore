@@ -3,7 +3,7 @@ excalidraw-server/excalidraw-server
 excalidraw-server/*.db
 excalidraw-server/data/
 excalidraw-server/.env
-
+excalidraw-app/src-tauri/gen
 # App
 excalidraw-app/node_modules/
 excalidraw-app/dist/
