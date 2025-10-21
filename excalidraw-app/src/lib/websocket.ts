@@ -9,6 +9,15 @@ interface BroadcastMetadata {
   userId?: string;
 }
 
+// Chat message interface
+export interface ChatMessage {
+  id: string;
+  roomId: string;
+  sender: string;
+  content: string;
+  timestamp: number;
+}
+
 export class CollaborationClient {
   private socket: Socket | null = null;
   private serverUrl: string;
@@ -81,6 +90,27 @@ export class CollaborationClient {
   onFirstInRoom(callback: () => void): void {
     if (!this.socket) return;
     this.socket.on('first-in-room', callback);
+  }
+
+  sendChatMessage(messageId: string, content: string): void {
+    if (!this.socket?.connected || !this.roomId) {
+      return;
+    }
+
+    this.socket.emit('server-chat-message', this.roomId, {
+      id: messageId,
+      content,
+    });
+  }
+
+  onChatMessage(callback: (message: ChatMessage) => void): void {
+    if (!this.socket) return;
+    this.socket.on('client-chat-message', callback);
+  }
+
+  onChatHistory(callback: (messages: ChatMessage[]) => void): void {
+    if (!this.socket) return;
+    this.socket.on('chat-history', callback);
   }
 
   // Follow feature methods
