@@ -54,7 +54,7 @@ export function getServerConfig(): ServerConfig {
     }
   }
   return {
-    url: 'http://localhost:3002',
+    url: '',
     enabled: false,
   };
 }

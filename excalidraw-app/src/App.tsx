@@ -1,28 +1,18 @@
 import { useState, useEffect } from "react";
 import { ConnectionDialog } from "./components/ConnectionDialog";
 import { ExcalidrawWrapper } from "./components/ExcalidrawWrapper";
-import { ServerConfig } from "./lib/api";
+import { ServerConfig, getServerConfig, saveServerConfig } from "./lib/api";
 import "./App.css";
 
 function App() {
-  // Initialize state from localStorage to avoid setState in useEffect
-  const [serverConfig, setServerConfig] = useState<ServerConfig | null>(() => {
-    const saved = localStorage.getItem('excalidraw-server-config');
-    if (saved) {
-      try {
-        return JSON.parse(saved) as ServerConfig;
-      } catch {
-        return null;
-      }
-    }
-    return null;
-  });
-  const [showDialog, setShowDialog] = useState(() => {
-    const saved = localStorage.getItem('excalidraw-server-config');
-    return !saved; // Show dialog only if no saved config
-  });
-
+  const [serverConfig, setServerConfig] = useState<ServerConfig>(() => getServerConfig());
+  const [username, setUsername] = useState(() => localStorage.getItem('excalidraw-username') ?? '');
   const [roomId, setRoomId] = useState<string | null>(null);
+  const [showDialog, setShowDialog] = useState(() => {
+    const hasServerConfig = localStorage.getItem('excalidraw-server-config');
+    const hasUsername = localStorage.getItem('excalidraw-username');
+    return !hasServerConfig || !hasUsername;
+  });
 
   useEffect(() => {
 
@@ -39,23 +29,31 @@ function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  const handleConnect = (config: ServerConfig, newRoomId?: string) => {
+  useEffect(() => {
+    localStorage.setItem('excalidraw-username', username);
+  }, [username]);
+
+  const applyServerConfig = (config: ServerConfig) => {
     setServerConfig(config);
-    if (newRoomId) {
-      setRoomId(newRoomId);
+    saveServerConfig(config);
+    if (!config.enabled) {
+      setRoomId(null);
     }
+  };
+
+  const handleServerConfigChange = (config: ServerConfig) => {
+    applyServerConfig(config);
+  };
+
+  const handleRoomSelection = (selectedRoomId: string, serverUrl: string) => {
+    applyServerConfig({ url: serverUrl, enabled: true });
+    setRoomId(selectedRoomId);
     setShowDialog(false);
   };
 
-  if (!serverConfig) {
-    return (
-      <ConnectionDialog 
-        onConnect={handleConnect} 
-        onClose={() => setShowDialog(false)}
-        isConnected={false}
-      />
-    );
-  }
+  const handleDisconnect = (serverUrl: string) => {
+    applyServerConfig({ url: serverUrl, enabled: false });
+  };
 
   return (
     <>
@@ -67,10 +65,14 @@ function App() {
       />
       {showDialog && (
         <ConnectionDialog 
-          onConnect={handleConnect} 
+          serverConfig={serverConfig}
+          username={username}
+          onUsernameChange={setUsername}
+          onServerConfigChange={handleServerConfigChange}
+          onSelectRoom={handleRoomSelection}
+          onDisconnect={handleDisconnect}
           onClose={() => setShowDialog(false)}
           currentRoomId={roomId || undefined}
-          isConnected={serverConfig.enabled && !!roomId}
         />
       )}
     </>
