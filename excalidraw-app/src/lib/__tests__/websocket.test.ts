@@ -239,4 +239,65 @@ describe('CollaborationClient', () => {
       await expect(client.connect()).rejects.toThrow();
     });
   });
+
+  describe('chat functionality', () => {
+    beforeEach(async () => {
+      mockSocket.connected = true;
+      mockSocket.on.mockImplementation((event: string, callback: Function) => {
+        if (event === 'connect') {
+          setTimeout(() => callback(), 0);
+        }
+      });
+      await client.connect();
+      client.joinRoom('test-room');
+    });
+
+    it('should send chat message', () => {
+      client.sendChatMessage('msg-123', 'Hello world');
+      expect(mockSocket.emit).toHaveBeenCalledWith('server-chat-message', 'test-room', {
+        id: 'msg-123',
+        content: 'Hello world',
+      });
+    });
+
+    it('should not send chat message when not connected', () => {
+      mockSocket.connected = false;
+      client.sendChatMessage('msg-123', 'Hello');
+      const emitCalls = mockSocket.emit.mock.calls.filter(
+        (call: any[]) => call[0] === 'server-chat-message'
+      );
+      expect(emitCalls).toHaveLength(0);
+    });
+
+    it('should handle receiving chat messages', () => {
+      const callback = vi.fn();
+      client.onChatMessage(callback);
+
+      expect(mockSocket.on).toHaveBeenCalledWith('client-chat-message', callback);
+    });
+
+    it('should handle receiving chat history', () => {
+      const callback = vi.fn();
+      client.onChatHistory(callback);
+
+      expect(mockSocket.on).toHaveBeenCalledWith('chat-history', callback);
+    });
+
+    it('should handle empty chat message content', () => {
+      client.sendChatMessage('msg-123', '');
+      expect(mockSocket.emit).toHaveBeenCalledWith('server-chat-message', 'test-room', {
+        id: 'msg-123',
+        content: '',
+      });
+    });
+
+    it('should handle special characters in chat messages', () => {
+      const specialContent = 'Hello 👋 <script>alert("test")</script>';
+      client.sendChatMessage('msg-123', specialContent);
+      expect(mockSocket.emit).toHaveBeenCalledWith('server-chat-message', 'test-room', {
+        id: 'msg-123',
+        content: specialContent,
+      });
+    });
+  });
 });

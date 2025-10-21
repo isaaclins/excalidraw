@@ -5,8 +5,10 @@ import { ExcalidrawAPI, ServerConfig } from '../lib/api';
 import { localStorage as localStorageAPI, ServerStorage, Snapshot } from '../lib/storage';
 import { RoomsSidebar } from './RoomsSidebar';
 import { SnapshotsSidebar } from './SnapshotsSidebar';
+import { ChatPanel } from './ChatPanel';
 import { AutoSnapshotManager } from '../lib/autoSnapshot';
 import { reconcileElements, BroadcastedExcalidrawElement } from '../lib/reconciliation';
+import { ChatMessage } from '../lib/websocket';
 import '@excalidraw/excalidraw/index.css';
 
 // Use any for elements to avoid type issues with Excalidraw's internal types
@@ -92,6 +94,7 @@ export function ExcalidrawWrapper({ serverConfig, onOpenSettings, onRoomIdChange
   const lastCursorBroadcastTime = useRef<number>(0);
   const lastCursorPayload = useRef<{ x: number; y: number; pointerType?: string | null } | null>(null);
   const lastCursorButton = useRef<PointerButton>(null);
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
 
   const getCollaboratorColor = useCallback((userId: string): string => {
     const cached = collaboratorColorMap.current.get(userId);
@@ -381,6 +384,16 @@ export function ExcalidrawWrapper({ serverConfig, onOpenSettings, onRoomIdChange
         broadcastScene(collab, elements, true); // syncAll = true for new users
       }
     });
+
+    collab.onChatMessage((message: ChatMessage) => {
+      console.log('Chat message received:', message);
+      setChatMessages((prev) => [...prev, message]);
+    });
+
+    collab.onChatHistory((messages: ChatMessage[]) => {
+      console.log('Chat history received:', messages);
+      setChatMessages(messages);
+    });
   }, [applyRemoteCursorUpdate, clearCollaboratorTimeout, getCollaboratorColor, updateCollaboratorsAppState]);
 
   // This effect sets up external API and storage instances - legitimate use of setState in effect
@@ -535,6 +548,7 @@ export function ExcalidrawWrapper({ serverConfig, onOpenSettings, onRoomIdChange
         pendingBroadcastTimeout.current = null;
       }
       resetCollaboratorsState();
+      setChatMessages([]); // Clear chat when switching rooms
 
       // Update room ID
       setCurrentRoomId(roomId);
@@ -793,6 +807,22 @@ export function ExcalidrawWrapper({ serverConfig, onOpenSettings, onRoomIdChange
     }
   };
 
+  const handleSendChatMessage = useCallback((content: string) => {
+    if (!api || !currentRoomId) {
+      console.error('Cannot send chat message: no API or room');
+      return;
+    }
+
+    const collab = api.getCollaborationClient();
+    if (!collab) {
+      console.error('Cannot send chat message: no collaboration client');
+      return;
+    }
+
+    const messageId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    collab.sendChatMessage(messageId, content);
+  }, [api, currentRoomId]);
+
   return (
     <div style={{ height: '100vh', width: '100vw' }}>
       <Excalidraw
@@ -865,6 +895,14 @@ export function ExcalidrawWrapper({ serverConfig, onOpenSettings, onRoomIdChange
           onClose={() => setShowSnapshotsSidebar(false)}
           onLoadSnapshot={handleLoadSnapshot}
           onSaveSnapshot={handleSaveSnapshot}
+        />
+      )}
+      
+      {currentRoomId && api && (
+        <ChatPanel
+          messages={chatMessages}
+          onSendMessage={handleSendChatMessage}
+          currentUserId={api.getCollaborationClient()?.getSocketId()}
         />
       )}
     </div>
