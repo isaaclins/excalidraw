@@ -1,0 +1,166 @@
+.followers-list-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.3);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.followers-list {
+  background: white;
+  height: 100vh;
+  width: 380px;
+  box-shadow: -2px 0 8px rgba(0, 0, 0, 0.1);
+  display: flex;
+  flex-direction: column;
+}
+
+.followers-list-header {
+  padding: 1.5rem;
+  border-bottom: 1px solid #e0e0e0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.followers-list-header h3 {
+  margin: 0;
+  color: #333;
+  font-size: 1.25rem;
+}
+
+.collaborators-container {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1rem;
+}
+
+.no-collaborators {
+  text-align: center;
+  padding: 2rem;
+  color: #666;
+  font-size: 0.9rem;
+}
+
+.collaborator-item {
+  background: white;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  padding: 1rem;
+  margin-bottom: 0.75rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  transition: all 0.2s;
+}
+
+.collaborator-item:hover {
+  border-color: #6965db;
+  box-shadow: 0 2px 4px rgba(105, 101, 219, 0.1);
+}
+
+.collaborator-item.following {
+  background-color: #f0f0ff;
+  border-color: #6965db;
+  border-width: 2px;
+}
+
+.collaborator-info {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex: 1;
+}
+
+.collaborator-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-weight: 600;
+  font-size: 1.1rem;
+}
+
+.collaborator-details {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.collaborator-username {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #333;
+}
+
+.collaborator-status {
+  font-size: 0.8rem;
+  color: #666;
+}
+
+.status-active {
+  color: #4caf50;
+}
+
+.status-idle {
+  color: #999;
+}
+
+.follow-button {
+  background-color: white;
+  border: 1px solid #6965db;
+  color: #6965db;
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.follow-button:hover {
+  background-color: #6965db;
+  color: white;
+}
+
+.follow-button.following {
+  background-color: #6965db;
+  color: white;
+  border-color: #6965db;
+}
+
+.follow-button.following:hover {
+  background-color: #5550cc;
+  border-color: #5550cc;
+}
+
+.followers-list-footer {
+  padding: 1rem 1.5rem;
+  border-top: 1px solid #e0e0e0;
+}
+
+.stop-following-button {
+  width: 100%;
+  background-color: #ff5252;
+  border: none;
+  color: white;
+  padding: 0.75rem;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.stop-following-button:hover {
+  background-color: #e04545;
+}
