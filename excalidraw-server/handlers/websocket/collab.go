@@ -5,7 +5,6 @@ import (
 	"reflect"
 	"regexp"
 	"sync"
-	"time"
 
 	"github.com/zishang520/engine.io/v2/types"
 	"github.com/zishang520/engine.io/v2/utils"
@@ -14,23 +13,9 @@ import (
 
 type ackInvoker func(err error, payload map[string]any)
 
-// ChatMessage represents a single chat message in a room
-type ChatMessage struct {
-	ID        string `json:"id"`
-	RoomID    string `json:"roomId"`
-	Sender    string `json:"sender"`
-	Content   string `json:"content"`
-	Timestamp int64  `json:"timestamp"`
-}
-
-const maxChatMessagesPerRoom = 1000
-
 var (
 	activeRooms = make(map[string]int)
 	roomsMutex  sync.RWMutex
-	// chatHistory stores chat messages per room (roomID -> []ChatMessage)
-	chatHistory      = make(map[string][]ChatMessage)
-	chatHistoryMutex sync.RWMutex
 )
 
 func GetActiveRooms() map[string]int {
@@ -124,13 +109,6 @@ func SetupSocketIO() *socketio.Server {
 				utils.Log().Printf("room %v has users %v\n", room, newRoomUsers)
 				srv.In(room).Emit("room-user-change", newRoomUsers)
 
-				// Send chat history to the newly joined user
-				chatHistoryMessages := getChatHistory(roomID)
-				if len(chatHistoryMessages) > 0 {
-					utils.Log().Printf("Sending %d chat messages to user %v in room %v\n", len(chatHistoryMessages), me, room)
-					_ = srv.To(myRoom).Emit("chat-history", chatHistoryMessages)
-				}
-
 				respondWithAck(socket, ack, "join-room-ack", map[string]any{
 					"status":     "ok",
 					"user_count": len(users),
@@ -148,13 +126,8 @@ func SetupSocketIO() *socketio.Server {
 			handleBroadcast(socket, datas, true)
 		})
 
-		//nolint:errcheck // Socket.IO event handlers do not return useful errors
-		socket.On("server-chat-message", func(datas ...any) {
-			handleChatMessage(socket, srv, datas)
-		})
-
 		socket.On("user-follow", func(datas ...any) {
-			// TODO: Implement user follow functionality
+			handleUserFollow(srv, socket, datas)
 		})
 
 		socket.On("disconnecting", func(datas ...any) {
@@ -173,9 +146,6 @@ func SetupSocketIO() *socketio.Server {
 					roomsMutex.Lock()
 					if len(otherClients) == 0 {
 						delete(activeRooms, roomID)
-						// Clean up chat history when room becomes empty
-						clearChatHistory(roomID)
-						utils.Log().Printf("room %v is now empty, cleared chat history\n", currentRoom)
 					} else {
 						activeRooms[roomID] = len(otherClients)
 					}
@@ -221,88 +191,6 @@ func handleBroadcast(socket *socketio.Socket, datas []any, volatile bool) {
 	}
 
 	respondWithAck(socket, ack, "broadcast-ack", makeBroadcastAckPayload(payload, nil), nil)
-}
-
-func handleChatMessage(socket *socketio.Socket, srv *socketio.Server, datas []any) {
-	ack, args := extractAck(datas)
-
-	if len(args) < 2 {
-		err := fmt.Errorf("invalid chat message format")
-		respondWithAck(socket, ack, "", map[string]any{
-			"status": "error",
-			"error":  err.Error(),
-		}, err)
-		return
-	}
-
-	roomID, ok := args[0].(string)
-	if !ok || roomID == "" {
-		err := fmt.Errorf("missing or invalid room id")
-		respondWithAck(socket, ack, "", map[string]any{
-			"status": "error",
-			"error":  err.Error(),
-		}, err)
-		return
-	}
-
-	messageData, ok := args[1].(map[string]any)
-	if !ok {
-		err := fmt.Errorf("invalid message data")
-		respondWithAck(socket, ack, "", map[string]any{
-			"status": "error",
-			"error":  err.Error(),
-		}, err)
-		return
-	}
-
-	// Extract message fields
-	content, _ := messageData["content"].(string)
-	if content == "" {
-		err := fmt.Errorf("message content is required")
-		respondWithAck(socket, ack, "", map[string]any{
-			"status": "error",
-			"error":  err.Error(),
-		}, err)
-		return
-	}
-
-	messageID, _ := messageData["id"].(string)
-	if messageID == "" {
-		err := fmt.Errorf("message id is required")
-		respondWithAck(socket, ack, "", map[string]any{
-			"status": "error",
-			"error":  err.Error(),
-		}, err)
-		return
-	}
-
-	// Create chat message
-	message := ChatMessage{
-		ID:        messageID,
-		RoomID:    roomID,
-		Sender:    string(socket.Id()),
-		Content:   content,
-		Timestamp: time.Now().UnixMilli(),
-	}
-
-	// Store message in history
-	addChatMessage(roomID, message)
-	utils.Log().Printf("user %v sent chat message to room %v\n", socket.Id(), roomID)
-
-	// Broadcast to all users in the room (including sender)
-	emitErr := srv.To(socketio.Room(roomID)).Emit("client-chat-message", message)
-	if emitErr != nil {
-		respondWithAck(socket, ack, "", map[string]any{
-			"status": "error",
-			"error":  emitErr.Error(),
-		}, emitErr)
-		return
-	}
-
-	respondWithAck(socket, ack, "", map[string]any{
-		"status":    "ok",
-		"messageId": messageID,
-	}, nil)
 }
 
 func extractAck(datas []any) (ack ackInvoker, args []any) {
@@ -467,45 +355,44 @@ func extractMessageID(original any) string {
 	return ""
 }
 
-// addChatMessage adds a message to room's chat history, maintaining the max size limit
-func addChatMessage(roomID string, message ChatMessage) {
-	chatHistoryMutex.Lock()
-	defer chatHistoryMutex.Unlock()
-
-	messages, exists := chatHistory[roomID]
-	if !exists {
-		messages = make([]ChatMessage, 0, maxChatMessagesPerRoom)
+func handleUserFollow(srv *socketio.Server, socket *socketio.Socket, datas []any) {
+	if len(datas) < 3 {
+		utils.Log().Printf("user-follow: insufficient arguments from %v\n", socket.Id())
+		return
 	}
 
-	messages = append(messages, message)
-
-	// Keep only the last maxChatMessagesPerRoom messages
-	if len(messages) > maxChatMessagesPerRoom {
-		messages = messages[len(messages)-maxChatMessagesPerRoom:]
+	roomID, ok := datas[0].(string)
+	if !ok || roomID == "" {
+		utils.Log().Printf("user-follow: invalid room id from %v\n", socket.Id())
+		return
 	}
 
-	chatHistory[roomID] = messages
-}
-
-// getChatHistory retrieves chat history for a room
-func getChatHistory(roomID string) []ChatMessage {
-	chatHistoryMutex.RLock()
-	defer chatHistoryMutex.RUnlock()
-
-	messages, exists := chatHistory[roomID]
-	if !exists {
-		return []ChatMessage{}
+	targetUserId, ok := datas[1].(string)
+	if !ok || targetUserId == "" {
+		utils.Log().Printf("user-follow: invalid target user id from %v\n", socket.Id())
+		return
 	}
 
-	// Return a copy to avoid race conditions
-	result := make([]ChatMessage, len(messages))
-	copy(result, messages)
-	return result
-}
+	isFollowing, ok := datas[2].(bool)
+	if !ok {
+		utils.Log().Printf("user-follow: invalid isFollowing flag from %v\n", socket.Id())
+		return
+	}
 
-// clearChatHistory removes chat history when a room becomes empty
-func clearChatHistory(roomID string) {
-	chatHistoryMutex.Lock()
-	defer chatHistoryMutex.Unlock()
-	delete(chatHistory, roomID)
+	followerId := socket.Id()
+	utils.Log().Printf("user-follow: %v %s %v in room %v\n",
+		followerId,
+		map[bool]string{true: "following", false: "unfollowing"}[isFollowing],
+		targetUserId,
+		roomID)
+
+	// Broadcast the follow status to all users in the room
+	room := socketio.Room(roomID)
+	payload := map[string]any{
+		"followerId":  followerId,
+		"targetId":    targetUserId,
+		"isFollowing": isFollowing,
+	}
+
+	_ = srv.In(room).Emit("user-follow-update", payload)
 }
