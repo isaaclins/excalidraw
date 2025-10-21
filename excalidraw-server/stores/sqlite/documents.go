@@ -5,6 +5,7 @@ import (
 	"context"
 	"excalidraw-server/core"
 	"fmt"
+	"time"
 
 	"database/sql"
 	stdlog "log"
@@ -17,6 +18,12 @@ import (
 type documentStore struct {
 	db *sql.DB
 }
+
+const (
+	autosaveCreatedBy   = "__autosave__"
+	autosaveDefaultName = "Latest autosave snapshot"
+	autosaveDefaultDesc = "Automatically saved by Excalidraw"
+)
 
 func NewDocumentStore(dataSourceName string) core.DocumentStore {
 	db, err := sql.Open("sqlite3", dataSourceName)
@@ -52,9 +59,18 @@ func NewDocumentStore(dataSourceName string) core.DocumentStore {
 	settingsTable := `CREATE TABLE IF NOT EXISTS room_settings (
 		room_id TEXT PRIMARY KEY,
 		max_snapshots INTEGER DEFAULT 10,
-		auto_save_interval INTEGER DEFAULT 300
+		auto_save_interval INTEGER DEFAULT 60
 	);`
 	_, err = db.Exec(settingsTable)
+	if err != nil {
+		stdlog.Fatal(err)
+	}
+
+	roomsTable := `CREATE TABLE IF NOT EXISTS rooms (
+		id TEXT PRIMARY KEY,
+		last_active INTEGER NOT NULL
+	);`
+	_, err = db.Exec(roomsTable)
 	if err != nil {
 		stdlog.Fatal(err)
 	}
@@ -136,7 +152,7 @@ func (s *documentStore) CreateSnapshot(ctx context.Context, roomID, name, descri
 		settings = &RoomSettings{
 			RoomID:           roomID,
 			MaxSnapshots:     10,
-			AutoSaveInterval: 300,
+			AutoSaveInterval: 60,
 		}
 	}
 
@@ -300,7 +316,7 @@ func (s *documentStore) GetRoomSettings(ctx context.Context, roomID string) (*Ro
 			return &RoomSettings{
 				RoomID:           roomID,
 				MaxSnapshots:     10,
-				AutoSaveInterval: 300,
+				AutoSaveInterval: 60,
 			}, nil
 		}
 		log.WithField("error", err).Error("Failed to retrieve room settings")
@@ -329,5 +345,152 @@ func (s *documentStore) UpdateRoomSettings(ctx context.Context, roomID string, m
 	}
 
 	log.Info("Room settings updated successfully")
+	return nil
+}
+
+// UpsertAutosaveSnapshot creates or updates the autosave snapshot for a room
+func (s *documentStore) UpsertAutosaveSnapshot(ctx context.Context, roomID, name, description, thumbnail string, data []byte) (string, error) {
+	if roomID == "" {
+		return "", fmt.Errorf("room id is required")
+	}
+
+	if name == "" {
+		name = autosaveDefaultName
+	}
+	if description == "" {
+		description = autosaveDefaultDesc
+	}
+
+	log := logrus.WithFields(logrus.Fields{
+		"room_id":     roomID,
+		"data_length": len(data),
+	})
+
+	var existingID string
+	err := s.db.QueryRowContext(ctx,
+		"SELECT id FROM snapshots WHERE room_id = ? AND created_by = ? LIMIT 1",
+		roomID, autosaveCreatedBy,
+	).Scan(&existingID)
+
+	createdAt := ulid.Now()
+
+	if err != nil {
+		if err != sql.ErrNoRows {
+			log.WithError(err).Error("Failed to query autosave snapshot")
+			return "", err
+		}
+
+		id := ulid.Make().String()
+		_, err = s.db.ExecContext(ctx,
+			"INSERT INTO snapshots (id, room_id, name, description, thumbnail, created_by, created_at, data) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+			id, roomID, name, description, thumbnail, autosaveCreatedBy, createdAt, data,
+		)
+		if err != nil {
+			log.WithError(err).Error("Failed to insert autosave snapshot")
+			return "", err
+		}
+
+		log.WithField("snapshot_id", id).Info("Autosave snapshot created")
+		return id, nil
+	}
+
+	_, err = s.db.ExecContext(ctx,
+		"UPDATE snapshots SET name = ?, description = ?, thumbnail = ?, data = ?, created_at = ? WHERE id = ?",
+		name, description, thumbnail, data, createdAt, existingID,
+	)
+	if err != nil {
+		log.WithFields(logrus.Fields{
+			"snapshot_id": existingID,
+			"error":       err,
+		}).Error("Failed to update autosave snapshot")
+		return "", err
+	}
+
+	log.WithField("snapshot_id", existingID).Info("Autosave snapshot updated")
+	return existingID, nil
+}
+
+func (s *documentStore) TouchRoom(ctx context.Context, roomID string) error {
+	if roomID == "" {
+		return fmt.Errorf("room id is required")
+	}
+
+	_, err := s.db.ExecContext(ctx,
+		`INSERT INTO rooms (id, last_active) VALUES (?, ?)
+			ON CONFLICT(id) DO UPDATE SET last_active = excluded.last_active`,
+		roomID,
+		time.Now().UnixMilli(),
+	)
+	if err != nil {
+		logrus.WithError(err).WithField("room_id", roomID).Error("Failed to upsert room")
+	}
+	return err
+}
+
+func (s *documentStore) ListRooms(ctx context.Context) ([]core.Room, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT id, last_active FROM rooms ORDER BY last_active DESC`)
+	if err != nil {
+		logrus.WithError(err).Error("Failed to list rooms")
+		return nil, err
+	}
+	defer func() {
+		if cerr := rows.Close(); cerr != nil {
+			logrus.WithError(cerr).Warn("Failed to close rooms rows")
+		}
+	}()
+
+	var rooms []core.Room
+	for rows.Next() {
+		var room core.Room
+		if err := rows.Scan(&room.ID, &room.LastActive); err != nil {
+			logrus.WithError(err).Warn("Failed to scan room row")
+			continue
+		}
+		rooms = append(rooms, room)
+	}
+
+	return rooms, nil
+}
+
+func (s *documentStore) DeleteRoom(ctx context.Context, roomID string) error {
+	if roomID == "" {
+		return fmt.Errorf("room id is required")
+	}
+
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		logrus.WithError(err).Error("Failed to begin transaction for room deletion")
+		return err
+	}
+
+	rollback := func(cause error) error {
+		if rbErr := tx.Rollback(); rbErr != nil {
+			logrus.WithError(rbErr).Warn("Failed to rollback room deletion transaction")
+		}
+		return cause
+	}
+
+	statements := []struct {
+		query string
+		args  []any
+	}{
+		{"DELETE FROM snapshots WHERE room_id = ?", []any{roomID}},
+		{"DELETE FROM room_settings WHERE room_id = ?", []any{roomID}},
+		{"DELETE FROM rooms WHERE id = ?", []any{roomID}},
+	}
+
+	for _, stmt := range statements {
+		if _, err := tx.ExecContext(ctx, stmt.query, stmt.args...); err != nil {
+			logrus.WithError(err).WithField("room_id", roomID).Error("Failed to execute room deletion statement")
+			return rollback(err)
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		logrus.WithError(err).Error("Failed to commit room deletion transaction")
+		return err
+	}
+
+	logrus.WithField("room_id", roomID).Info("Room data deleted successfully")
 	return nil
 }

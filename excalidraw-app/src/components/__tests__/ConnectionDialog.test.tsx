@@ -49,7 +49,7 @@ beforeEach(() => {
 	vi.clearAllMocks();
 	fetchMock = vi.fn().mockResolvedValue({
 		ok: true,
-		json: async () => ({}),
+		json: async () => ([]),
 	});
 	vi.stubGlobal('fetch', fetchMock);
 });
@@ -71,8 +71,8 @@ describe('ConnectionDialog', () => {
 			renderDialog({ serverConfig: { url: 'http://localhost:3002', enabled: false } });
 			await waitFor(() => expect(fetchMock).toHaveBeenCalled());
 
-		expect(screen.getByText(/Currently using:/i)).toHaveTextContent('http://localhost:3002');
-	});
+			expect(screen.getByText(/Currently using:/i)).toHaveTextContent('http://localhost:3002');
+		});
 
 	it('disables connect button without server URL', async () => {
 		const { user } = renderDialog();
@@ -86,7 +86,10 @@ describe('ConnectionDialog', () => {
 	it('fetches rooms and updates config when connecting', async () => {
 		fetchMock.mockResolvedValue({
 			ok: true,
-			json: async () => ({ alpha: 2, beta: 1 }),
+			json: async () => ([
+				{ id: 'alpha', users: 2, lastActive: 1700000000000 },
+				{ id: 'beta', users: 1 },
+			]),
 		});
 
 		const { user, onServerConfigChange } = renderDialog();
@@ -106,7 +109,7 @@ describe('ConnectionDialog', () => {
 	it('joins selected room', async () => {
 		fetchMock.mockResolvedValue({
 			ok: true,
-			json: async () => ({ roomOne: 1 }),
+			json: async () => ([{ id: 'roomOne', users: 1 }]),
 		});
 
 		const { user, onSelectRoom } = renderDialog();
@@ -114,8 +117,8 @@ describe('ConnectionDialog', () => {
 		await user.type(screen.getByLabelText(/Server URL/i), 'http://example.com');
 		await user.click(screen.getByRole('button', { name: /^connect$/i }));
 
-		await waitFor(() => screen.getByText('roomOne'));
-		await user.click(screen.getByText('roomOne'));
+		await waitFor(() => screen.getByRole('button', { name: /^roomOne/i }));
+		await user.click(screen.getByRole('button', { name: /^roomOne/i }));
 
 		expect(onSelectRoom).toHaveBeenCalledWith('roomOne', 'http://example.com');
 	});
@@ -123,7 +126,7 @@ describe('ConnectionDialog', () => {
 	it('creates new room using username', async () => {
 		fetchMock.mockResolvedValue({
 			ok: true,
-			json: async () => ({}),
+			json: async () => ([]),
 		});
 
 		const { user, onSelectRoom } = renderDialog({ username: 'Alice' });
@@ -138,8 +141,40 @@ describe('ConnectionDialog', () => {
 		expect(onSelectRoom).toHaveBeenCalledWith(expect.stringMatching(/^alice-s-room-/), 'http://example.com');
 	});
 
-		it('invokes disconnect handler', async () => {
-			const { user, onDisconnect } = renderDialog({
+	it('requires confirmation phrase before deleting a room', async () => {
+		fetchMock
+			.mockResolvedValueOnce({
+				ok: true,
+				json: async () => ([{ id: 'roomOne', users: 0 }]),
+			})
+			.mockResolvedValueOnce({ ok: true });
+
+		const { user } = renderDialog({ serverConfig: { url: 'http://example.com', enabled: true } });
+
+		await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+		await user.click(screen.getByRole('button', { name: /Delete room roomOne/i }));
+
+		const confirmationInput = screen.getByPlaceholderText(/confirm/i);
+		await user.type(confirmationInput, 'wrong phrase');
+		await user.click(screen.getByRole('button', { name: /Confirm Delete/i }));
+
+		expect(screen.getByText(/enter "confirm"/i)).toBeInTheDocument();
+		expect(fetchMock).toHaveBeenCalledTimes(1);
+
+		await user.clear(confirmationInput);
+		await user.type(confirmationInput, 'confirm');
+		await user.click(screen.getByRole('button', { name: /Confirm Delete/i }));
+
+		await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+		expect(fetchMock).toHaveBeenLastCalledWith('http://example.com/api/rooms/roomOne', {
+			method: 'DELETE',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ confirmation: 'confirm' }),
+		});
+	});
+
+	it('invokes disconnect handler', async () => {
+		const { user, onDisconnect } = renderDialog({
 			serverConfig: { url: 'http://example.com', enabled: true },
 			currentRoomId: 'alpha',
 		});

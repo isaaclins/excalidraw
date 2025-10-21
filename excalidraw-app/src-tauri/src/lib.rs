@@ -5,7 +5,7 @@ mod db;
 pub fn run() {
     // Initialize the database (lazy static will create it on first access)
     let _ = &*db::DB;
-    
+
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
@@ -15,6 +15,7 @@ pub fn run() {
             commands::list_drawings,
             commands::delete_drawing,
             commands::save_snapshot,
+            commands::save_autosave_snapshot,
             commands::list_snapshots,
             commands::load_snapshot,
             commands::delete_snapshot,

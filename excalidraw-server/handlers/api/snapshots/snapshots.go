@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/render"
@@ -19,6 +20,13 @@ type (
 		Description string `json:"description"`
 		Thumbnail   string `json:"thumbnail"`
 		CreatedBy   string `json:"created_by"`
+		Data        string `json:"data"`
+	}
+
+	AutosaveSnapshotRequest struct {
+		Name        string `json:"name"`
+		Description string `json:"description"`
+		Thumbnail   string `json:"thumbnail"`
 		Data        string `json:"data"`
 	}
 
@@ -36,6 +44,10 @@ type (
 		AutoSaveInterval int `json:"auto_save_interval"`
 	}
 
+	DeleteRoomRequest struct {
+		Confirmation string `json:"confirmation"`
+	}
+
 	SnapshotStore interface {
 		CreateSnapshot(ctx context.Context, roomID, name, description, thumbnail, createdBy string, data []byte) (string, error)
 		ListSnapshots(ctx context.Context, roomID string) ([]sqlite.Snapshot, error)
@@ -44,8 +56,61 @@ type (
 		UpdateSnapshotMetadata(ctx context.Context, id, name, description string) error
 		GetRoomSettings(ctx context.Context, roomID string) (*sqlite.RoomSettings, error)
 		UpdateRoomSettings(ctx context.Context, roomID string, maxSnapshots, autoSaveInterval int) error
+		UpsertAutosaveSnapshot(ctx context.Context, roomID, name, description, thumbnail string, data []byte) (string, error)
+		DeleteRoom(ctx context.Context, roomID string) error
 	}
 )
+
+// HandleUpsertAutosaveSnapshot creates or updates the autosave snapshot for a room
+func HandleUpsertAutosaveSnapshot(store SnapshotStore) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		roomID := chi.URLParam(r, "roomId")
+
+		var req AutosaveSnapshotRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			logrus.WithField("error", err).Error("Failed to decode autosave request")
+			http.Error(w, "Invalid request body", http.StatusBadRequest)
+			return
+		}
+
+		id, err := store.UpsertAutosaveSnapshot(r.Context(), roomID, req.Name, req.Description, req.Thumbnail, []byte(req.Data))
+		if err != nil {
+			logrus.WithField("error", err).Error("Failed to upsert autosave snapshot")
+			http.Error(w, "Failed to save autosave snapshot", http.StatusInternalServerError)
+			return
+		}
+
+		render.JSON(w, r, CreateSnapshotResponse{ID: id})
+	}
+}
+
+// HandleDeleteRoom deletes all persisted data associated with a room
+func HandleDeleteRoom(store SnapshotStore) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		roomID := chi.URLParam(r, "roomId")
+
+		var req DeleteRoomRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			logrus.WithField("error", err).Warn("failed to decode delete room request")
+			http.Error(w, "Invalid request body", http.StatusBadRequest)
+			return
+		}
+
+		trimmed := strings.TrimSpace(req.Confirmation)
+		if !strings.EqualFold(trimmed, "confirm") {
+			http.Error(w, "Confirmation phrase does not match", http.StatusBadRequest)
+			return
+		}
+
+		if err := store.DeleteRoom(r.Context(), roomID); err != nil {
+			logrus.WithError(err).WithField("room_id", roomID).Error("failed to delete room")
+			http.Error(w, "Failed to delete room", http.StatusInternalServerError)
+			return
+		}
+
+		w.WriteHeader(http.StatusNoContent)
+	}
+}
 
 // HandleCreateSnapshot creates a new snapshot for a room
 func HandleCreateSnapshot(store SnapshotStore) http.HandlerFunc {
@@ -189,7 +254,7 @@ func HandleUpdateRoomSettings(store SnapshotStore) http.HandlerFunc {
 			req.MaxSnapshots = 10
 		}
 		if req.AutoSaveInterval < 60 {
-			req.AutoSaveInterval = 300
+			req.AutoSaveInterval = 60
 		}
 
 		err = store.UpdateRoomSettings(r.Context(), roomID, req.MaxSnapshots, req.AutoSaveInterval)

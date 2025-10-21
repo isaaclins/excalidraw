@@ -13,17 +13,17 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"sort"
 	"syscall"
-
-	"github.com/sirupsen/logrus"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
+	"github.com/sirupsen/logrus"
 	socketio "github.com/zishang520/socket.io/v2/socket"
 )
 
-func setupRouter(documentStore core.DocumentStore) *chi.Mux {
+func setupRouter(documentStore core.DocumentStore, roomRegistry core.RoomRegistry) *chi.Mux {
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
 
@@ -67,9 +67,76 @@ func setupRouter(documentStore core.DocumentStore) *chi.Mux {
 	})
 
 	r.Get("/api/rooms", func(w http.ResponseWriter, r *http.Request) {
-		rooms := websocket.GetActiveRooms()
+		activeRooms := websocket.GetActiveRooms()
+		roomMap := make(map[string]*struct {
+			ID         string `json:"id"`
+			Users      int    `json:"users"`
+			LastActive *int64 `json:"lastActive,omitempty"`
+		})
+
+		for id, count := range activeRooms {
+			roomMap[id] = &struct {
+				ID         string `json:"id"`
+				Users      int    `json:"users"`
+				LastActive *int64 `json:"lastActive,omitempty"`
+			}{
+				ID:    id,
+				Users: count,
+			}
+		}
+
+		if roomRegistry != nil {
+			if storedRooms, err := roomRegistry.ListRooms(r.Context()); err != nil {
+				logrus.WithError(err).Warn("failed to list rooms from registry")
+			} else {
+				for _, room := range storedRooms {
+					entry, exists := roomMap[room.ID]
+					if !exists {
+						entry = &struct {
+							ID         string `json:"id"`
+							Users      int    `json:"users"`
+							LastActive *int64 `json:"lastActive,omitempty"`
+						}{ID: room.ID}
+						roomMap[room.ID] = entry
+					}
+
+					if room.LastActive > 0 {
+						lastActive := room.LastActive
+						entry.LastActive = &lastActive
+					}
+				}
+			}
+		}
+
+		roomList := make([]struct {
+			ID         string `json:"id"`
+			Users      int    `json:"users"`
+			LastActive *int64 `json:"lastActive,omitempty"`
+		}, 0, len(roomMap))
+		for _, entry := range roomMap {
+			roomList = append(roomList, *entry)
+		}
+
+		sort.Slice(roomList, func(i, j int) bool {
+			if roomList[i].Users == roomList[j].Users {
+				li := int64(0)
+				if roomList[i].LastActive != nil {
+					li = *roomList[i].LastActive
+				}
+				lj := int64(0)
+				if roomList[j].LastActive != nil {
+					lj = *roomList[j].LastActive
+				}
+				if li == lj {
+					return roomList[i].ID < roomList[j].ID
+				}
+				return li > lj
+			}
+			return roomList[i].Users > roomList[j].Users
+		})
+
 		w.Header().Set("Content-Type", "application/json")
-		if err := json.NewEncoder(w).Encode(rooms); err != nil {
+		if err := json.NewEncoder(w).Encode(roomList); err != nil {
 			http.Error(w, "failed to encode response", http.StatusInternalServerError)
 		}
 	})
@@ -80,6 +147,14 @@ func setupRouter(documentStore core.DocumentStore) *chi.Mux {
 			r.Post("/", snapshots.HandleCreateSnapshot(snapshotStore))
 			r.Get("/", snapshots.HandleListSnapshots(snapshotStore))
 			r.Get("/count", snapshots.HandleGetSnapshotCount(snapshotStore))
+		})
+
+		r.Route("/api/rooms/{roomId}/autosave", func(r chi.Router) {
+			r.Put("/", snapshots.HandleUpsertAutosaveSnapshot(snapshotStore))
+		})
+
+		r.Route("/api/rooms/{roomId}", func(r chi.Router) {
+			r.Delete("/", snapshots.HandleDeleteRoom(snapshotStore))
 		})
 
 		r.Route("/api/snapshots/{snapshotId}", func(r chi.Router) {
@@ -139,8 +214,13 @@ func main() {
 	logrus.SetLevel(level)
 
 	documentStore := stores.GetStore()
-	r := setupRouter(documentStore)
-	ioo := websocket.SetupSocketIO()
+	var roomRegistry core.RoomRegistry
+	if registry, ok := documentStore.(core.RoomRegistry); ok {
+		roomRegistry = registry
+	}
+
+	r := setupRouter(documentStore, roomRegistry)
+	ioo := websocket.SetupSocketIO(roomRegistry)
 	r.Handle("/socket.io/", ioo.ServeHandler(nil))
 
 	logrus.WithField("addr", *listenAddr).Info("starting server")

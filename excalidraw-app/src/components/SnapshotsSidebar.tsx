@@ -28,7 +28,7 @@ export function SnapshotsSidebar({
   const [settings, setSettings] = useState<RoomSettings>({
     room_id: roomId,
     max_snapshots: 10,
-    auto_save_interval: 300,
+    auto_save_interval: 60,
   });
   const [loading, setLoading] = useState(false);
   const [showSaveModal, setShowSaveModal] = useState(false);

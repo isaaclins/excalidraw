@@ -2,7 +2,7 @@ import { Excalidraw, MainMenu, exportToBlob } from '@excalidraw/excalidraw';
 import type { ExcalidrawImperativeAPI } from '@excalidraw/excalidraw/types';
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { ExcalidrawAPI, ServerConfig } from '../lib/api';
-import { localStorage as localStorageAPI, ServerStorage, Snapshot } from '../lib/storage';
+import { localStorage as localStorageAPI, ServerStorage, Snapshot, loadLatestSnapshotData } from '../lib/storage';
 import { RoomsSidebar } from './RoomsSidebar';
 import { SnapshotsSidebar } from './SnapshotsSidebar';
 import { ChatPanel } from './ChatPanel';
@@ -78,11 +78,15 @@ export function ExcalidrawWrapper({ serverConfig, onOpenSettings, onRoomIdChange
   const [showRoomsSidebar, setShowRoomsSidebar] = useState(false);
   const [showSnapshotsSidebar, setShowSnapshotsSidebar] = useState(false);
   const [currentRoomId, setCurrentRoomId] = useState<string | null>(initialRoomId);
+  const currentRoomIdRef = useRef<string | null>(initialRoomId);
   const saveTimeoutRef = useRef<number | undefined>(undefined);
   const lastBroadcastedOrReceivedSceneVersion = useRef<number>(-1);
   const broadcastedElementVersions = useRef<Map<string, number>>(new Map());
   const autoSnapshotManager = useRef<AutoSnapshotManager | null>(null);
-  const [snapshotStorage, setSnapshotStorage] = useState<typeof localStorageAPI | ServerStorage>(localStorageAPI);
+  const [snapshotStorage, setSnapshotStorage] = useState<typeof localStorageAPI | ServerStorage>(() =>
+    serverConfig.enabled ? new ServerStorage(serverConfig.url) : localStorageAPI,
+  );
+  const snapshotStorageRef = useRef<typeof localStorageAPI | ServerStorage>(snapshotStorage);
   const lastBroadcastTime = useRef<number>(0);
   const pendingBroadcastTimeout = useRef<number | null>(null);
   const pendingBroadcastVersion = useRef<number | null>(null);
@@ -95,6 +99,10 @@ export function ExcalidrawWrapper({ serverConfig, onOpenSettings, onRoomIdChange
   const lastCursorPayload = useRef<{ x: number; y: number; pointerType?: string | null } | null>(null);
   const lastCursorButton = useRef<PointerButton>(null);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+
+  useEffect(() => {
+    currentRoomIdRef.current = currentRoomId;
+  }, [currentRoomId]);
 
   const getCollaboratorColor = useCallback((userId: string): string => {
     const cached = collaboratorColorMap.current.get(userId);
@@ -396,8 +404,76 @@ export function ExcalidrawWrapper({ serverConfig, onOpenSettings, onRoomIdChange
     });
   }, [applyRemoteCursorUpdate, clearCollaboratorTimeout, getCollaboratorColor, updateCollaboratorsAppState]);
 
-  // This effect sets up external API and storage instances - legitimate use of setState in effect
-  /* eslint-disable react-hooks/set-state-in-effect */
+  useEffect(() => {
+    snapshotStorageRef.current = snapshotStorage;
+  }, [snapshotStorage]);
+
+  const restoreRoomScene = useCallback(
+    async (roomId: string, storageOverride?: typeof localStorageAPI | ServerStorage) => {
+      if (!roomId) {
+        return;
+      }
+
+      const storage = storageOverride ?? snapshotStorageRef.current;
+      if (!storage) {
+        return;
+      }
+
+      try {
+        const sceneData = await loadLatestSnapshotData(storage, roomId);
+        if (!sceneData) {
+          return;
+        }
+
+        if (currentRoomIdRef.current !== roomId) {
+          return;
+        }
+
+        if (!excalidrawRef.current) {
+          return;
+        }
+
+        isApplyingRemoteUpdate.current = true;
+
+        const nextElements = sceneData.elements as ExcalidrawElement[];
+        const currentAppState = excalidrawRef.current.getAppState();
+        excalidrawRef.current.updateScene({
+          elements: nextElements,
+          appState: {
+            ...currentAppState,
+            ...sceneData.appState,
+          },
+        });
+
+        const historyApi = (excalidrawRef.current as ExcalidrawImperativeAPI & { history?: { clear?: () => void } }).history;
+        if (historyApi && typeof historyApi.clear === 'function') {
+          historyApi.clear();
+        }
+
+        broadcastedElementVersions.current.clear();
+        for (const element of nextElements) {
+          if (element?.id) {
+            broadcastedElementVersions.current.set(element.id, element.version ?? 0);
+          }
+        }
+
+        lastBroadcastedOrReceivedSceneVersion.current = getSceneVersion(nextElements);
+        pendingBroadcastVersion.current = null;
+        if (pendingBroadcastTimeout.current !== null) {
+          clearTimeout(pendingBroadcastTimeout.current);
+          pendingBroadcastTimeout.current = null;
+        }
+      } catch (error) {
+        console.error(`Failed to restore scene for room ${roomId}`, error);
+      } finally {
+        setTimeout(() => {
+          isApplyingRemoteUpdate.current = false;
+        }, 0);
+      }
+    },
+    [],
+  );
+
   useEffect(() => {
     const excalidrawAPI = new ExcalidrawAPI(serverConfig);
     broadcastedElementVersions.current.clear();
@@ -412,37 +488,46 @@ export function ExcalidrawWrapper({ serverConfig, onOpenSettings, onRoomIdChange
     setApi(excalidrawAPI);
 
     // Set up snapshot storage based on server config
-    const storage = serverConfig.enabled 
+    const storage = serverConfig.enabled
       ? new ServerStorage(serverConfig.url)
       : localStorageAPI;
     setSnapshotStorage(storage);
 
     // If server is enabled and we have a room ID, connect
     if (serverConfig.enabled && initialRoomId) {
-      excalidrawAPI.connectToCollaboration(initialRoomId).then(() => {
-        const collab = excalidrawAPI.getCollaborationClient();
-        if (collab) {
-          setupCollaboration(collab);
-        }
-      }).catch((error) => {
-        console.error('Failed to connect to collaboration:', error);
-        alert('Failed to connect to collaboration server. Working in local mode.');
-      });
+      currentRoomIdRef.current = initialRoomId;
+      setCurrentRoomId(initialRoomId);
+      excalidrawAPI
+        .connectToCollaboration(initialRoomId)
+        .then(() => {
+          const collab = excalidrawAPI.getCollaborationClient();
+          if (collab) {
+            setupCollaboration(collab);
+          }
+          return restoreRoomScene(initialRoomId, storage);
+        })
+        .catch((error) => {
+          console.error('Failed to connect to collaboration:', error);
+          alert('Failed to connect to collaboration server. Working in local mode.');
+        });
     } else if (serverConfig.enabled && !initialRoomId) {
+      currentRoomIdRef.current = null;
       setCurrentRoomId(null);
     } else if (!serverConfig.enabled) {
       // Generate local room ID for offline mode (for snapshots)
       const localRoomId = initialRoomId || generateRoomId();
+      currentRoomIdRef.current = localRoomId;
       setCurrentRoomId(localRoomId);
       if (!initialRoomId) {
         onRoomIdChange(localRoomId);
       }
-    }
-    
-    // Update current room ID when initialRoomId changes
-    if (initialRoomId) {
+      void restoreRoomScene(localRoomId, storage);
+    } else if (initialRoomId) {
+      currentRoomIdRef.current = initialRoomId;
       setCurrentRoomId(initialRoomId);
     }
+
+    const cursorTimeouts = collaboratorCursorTimeouts.current;
 
     return () => {
       excalidrawAPI.disconnect();
@@ -454,13 +539,12 @@ export function ExcalidrawWrapper({ serverConfig, onOpenSettings, onRoomIdChange
         pendingBroadcastTimeout.current = null;
       }
       pendingBroadcastVersion.current = null;
-      collaboratorCursorTimeouts.current.forEach((timeoutId: number) => {
+      cursorTimeouts.forEach((timeoutId: number) => {
         window.clearTimeout(timeoutId);
       });
-      collaboratorCursorTimeouts.current.clear();
+      cursorTimeouts.clear();
     };
-  }, [serverConfig, initialRoomId, onRoomIdChange, resetCollaboratorsState, setupCollaboration]);
-  /* eslint-enable react-hooks/set-state-in-effect */
+  }, [serverConfig, initialRoomId, onRoomIdChange, resetCollaboratorsState, restoreRoomScene, setupCollaboration]);
 
   // Initialize auto-snapshot manager when room is ready
   useEffect(() => {
@@ -475,12 +559,13 @@ export function ExcalidrawWrapper({ serverConfig, onOpenSettings, onRoomIdChange
           enabled: true,
           settings,
           onSave: async (roomId, data, thumbnail) => {
-            await snapshotStorage.saveSnapshot(
+            const timestampLabel = new Date().toLocaleString();
+            await snapshotStorage.saveAutosaveSnapshot(
               roomId,
               data,
-              `Auto-save ${new Date().toLocaleString()}`,
-              'Automatic snapshot',
-              thumbnail
+              thumbnail,
+              `Autosave ${timestampLabel}`,
+              'Automatic autosave snapshot'
             );
           },
           getData: () => {
@@ -538,10 +623,15 @@ export function ExcalidrawWrapper({ serverConfig, onOpenSettings, onRoomIdChange
     if (api && serverConfig.enabled) {
       // Disconnect from current room
       api.disconnect();
-      
+
+      if (autoSnapshotManager.current) {
+        autoSnapshotManager.current.stop();
+        autoSnapshotManager.current = null;
+      }
+
       broadcastedElementVersions.current.clear();
       lastBroadcastedOrReceivedSceneVersion.current = -1;
-  lastBroadcastTime.current = 0;
+      lastBroadcastTime.current = 0;
       pendingBroadcastVersion.current = null;
       if (pendingBroadcastTimeout.current !== null) {
         clearTimeout(pendingBroadcastTimeout.current);
@@ -549,24 +639,42 @@ export function ExcalidrawWrapper({ serverConfig, onOpenSettings, onRoomIdChange
       }
       resetCollaboratorsState();
       setChatMessages([]); // Clear chat when switching rooms
+      setCurrentDrawingId(null);
+
+      if (excalidrawRef.current) {
+        isApplyingRemoteUpdate.current = true;
+        excalidrawRef.current.updateScene({ elements: [] });
+        const historyApi = (excalidrawRef.current as ExcalidrawImperativeAPI & { history?: { clear?: () => void } }).history;
+        if (historyApi && typeof historyApi.clear === 'function') {
+          historyApi.clear();
+        }
+        setTimeout(() => {
+          isApplyingRemoteUpdate.current = false;
+        }, 0);
+      }
 
       // Update room ID
       setCurrentRoomId(roomId);
+      currentRoomIdRef.current = roomId;
       onRoomIdChange(roomId);
-      
+      void restoreRoomScene(roomId);
+
       // Reconnect to new room
       const newApi = new ExcalidrawAPI(serverConfig);
       setApi(newApi);
-      
-      newApi.connectToCollaboration(roomId).then(() => {
-        const collab = newApi.getCollaborationClient();
-        if (collab) {
-          setupCollaboration(collab);
-        }
-      }).catch((error) => {
-        console.error('Failed to connect to room:', error);
-        alert('Failed to connect to room. Please try again.');
-      });
+
+      newApi
+        .connectToCollaboration(roomId)
+        .then(() => {
+          const collab = newApi.getCollaborationClient();
+          if (collab) {
+            setupCollaboration(collab);
+          }
+        })
+        .catch((error) => {
+          console.error('Failed to connect to room:', error);
+          alert('Failed to connect to room. Please try again.');
+        });
     }
   };
 
@@ -678,10 +786,16 @@ export function ExcalidrawWrapper({ serverConfig, onOpenSettings, onRoomIdChange
     const buttonValue = pointerData?.button;
     const pointerButton: PointerButton = buttonValue === 'down' || buttonValue === 'up' ? buttonValue : null;
     const pointerTypeCandidate = pointerData?.pointerType ?? (pointer as { pointerType?: string })?.pointerType;
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-    const eventPointerType = typeof (pointerData as { event?: { pointerType?: string } })?.event?.pointerType === 'string'
-      ? (pointerData as { event?: { pointerType?: string } }).event?.pointerType
-      : null;
+    let eventPointerType: string | null = null;
+    if (pointerData && typeof pointerData === 'object') {
+      const eventCandidate = (pointerData as { event?: { pointerType?: unknown } }).event;
+      if (eventCandidate && typeof eventCandidate === 'object') {
+        const pointerTypeValue = (eventCandidate as { pointerType?: unknown }).pointerType;
+        if (typeof pointerTypeValue === 'string') {
+          eventPointerType = pointerTypeValue;
+        }
+      }
+    }
     const pointerType = typeof pointerTypeCandidate === 'string' ? pointerTypeCandidate : eventPointerType;
 
     const now = Date.now();

@@ -62,12 +62,16 @@ const writeBrowserState = (state: BrowserState): void => {
   }
 };
 
+export const AUTOSAVE_CREATED_BY = '__autosave__';
+const AUTOSAVE_NAME = 'Latest autosave snapshot';
+const AUTOSAVE_DESCRIPTION = 'Automatically saved by Excalidraw';
+
 const ensureRoomSettings = (state: BrowserState, roomId: string): RoomSettings => {
   if (!state.roomSettings[roomId]) {
     state.roomSettings[roomId] = {
       room_id: roomId,
       max_snapshots: 10,
-      auto_save_interval: 300,
+      auto_save_interval: 60,
     };
   }
   return state.roomSettings[roomId];
@@ -96,6 +100,11 @@ export interface RoomSettings {
   room_id: string;
   max_snapshots: number;
   auto_save_interval: number;
+}
+
+export interface SnapshotSceneData {
+  elements: unknown[];
+  appState: Record<string, unknown>;
 }
 
 export class LocalStorage {
@@ -210,6 +219,59 @@ export class LocalStorage {
     });
   }
 
+  async saveAutosaveSnapshot(
+    roomId: string,
+    data: string,
+    thumbnail: string,
+    name: string = AUTOSAVE_NAME,
+    description: string = AUTOSAVE_DESCRIPTION
+  ): Promise<string> {
+    if (!hasTauriBridge) {
+      const state = readBrowserState();
+      const timestamp = Date.now();
+      const existingIndex = state.snapshots.findIndex(
+        (snapshot) => snapshot.room_id === roomId && snapshot.created_by === AUTOSAVE_CREATED_BY
+      );
+
+      if (existingIndex !== -1) {
+        const existing = state.snapshots[existingIndex];
+        state.snapshots[existingIndex] = {
+          ...existing,
+          name,
+          description,
+          thumbnail,
+          created_by: AUTOSAVE_CREATED_BY,
+          created_at: timestamp,
+          data,
+        };
+        writeBrowserState(state);
+        return existing.id;
+      }
+
+      const id = createFallbackId();
+      state.snapshots.push({
+        id,
+        room_id: roomId,
+        name,
+        description,
+        thumbnail,
+        created_by: AUTOSAVE_CREATED_BY,
+        created_at: timestamp,
+        data,
+      });
+      writeBrowserState(state);
+      return id;
+    }
+
+    return invoke<string>('save_autosave_snapshot', {
+      roomId,
+      name,
+      description,
+      thumbnail,
+      data,
+    });
+  }
+
   async listSnapshots(roomId: string): Promise<Snapshot[]> {
     if (!hasTauriBridge) {
       const state = readBrowserState();
@@ -316,6 +378,21 @@ export class ServerStorage {
     return result.id;
   }
 
+  async deleteRoom(roomId: string, confirmation: string): Promise<void> {
+    const response = await fetch(`${this.serverUrl}/api/rooms/${roomId}`, {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ confirmation }),
+    });
+
+    if (!response.ok) {
+      const message = await response.text();
+      throw new Error(message || 'Failed to delete room');
+    }
+  }
+
   async loadDrawing(id: string): Promise<string> {
     const response = await fetch(`${this.serverUrl}/api/v2/${id}/`);
 
@@ -414,7 +491,7 @@ export class ServerStorage {
       return {
         room_id: roomId,
         max_snapshots: 10,
-        auto_save_interval: 300,
+        auto_save_interval: 60,
       };
     }
 
@@ -437,7 +514,81 @@ export class ServerStorage {
       throw new Error('Failed to update room settings');
     }
   }
+
+  async saveAutosaveSnapshot(
+    roomId: string,
+    data: string,
+    thumbnail: string,
+    name: string = AUTOSAVE_NAME,
+    description: string = AUTOSAVE_DESCRIPTION,
+  ): Promise<string> {
+    const response = await fetch(`${this.serverUrl}/api/rooms/${roomId}/autosave`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        name,
+        description,
+        thumbnail,
+        data,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to save autosave snapshot to server');
+    }
+
+    const result = await response.json();
+    return result.id as string;
+  }
 }
 
 export const localStorage = new LocalStorage();
+
+export async function loadLatestSnapshotData(
+  storage: LocalStorage | ServerStorage,
+  roomId: string,
+): Promise<SnapshotSceneData | null> {
+  if (!roomId) {
+    return null;
+  }
+
+  const snapshots = await storage.listSnapshots(roomId);
+  if (!snapshots || snapshots.length === 0) {
+    return null;
+  }
+
+  const sorted = [...snapshots].sort((a, b) => (b.created_at ?? 0) - (a.created_at ?? 0));
+  const preferred = sorted.find((snapshot) => snapshot.created_by === AUTOSAVE_CREATED_BY);
+  const target = preferred ?? sorted[0];
+  if (!target?.id) {
+    return null;
+  }
+
+  const snapshot = await storage.loadSnapshot(target.id);
+  if (!snapshot?.data) {
+    return null;
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(snapshot.data);
+  } catch {
+    throw new Error('Failed to parse snapshot data');
+  }
+
+  if (!parsed || typeof parsed !== 'object') {
+    return null;
+  }
+
+  const payload = parsed as { elements?: unknown; appState?: Record<string, unknown> };
+  const elements = Array.isArray(payload.elements) ? payload.elements : [];
+  const appState = payload.appState && typeof payload.appState === 'object' ? payload.appState : {};
+
+  return {
+    elements,
+    appState,
+  };
+}
 

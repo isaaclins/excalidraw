@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { ServerStorage, LocalStorage } from '../storage';
+import { ServerStorage, LocalStorage, loadLatestSnapshotData, AUTOSAVE_CREATED_BY } from '../storage';
 import { invoke } from '@tauri-apps/api/core';
 
 vi.mock('@tauri-apps/api/core');
@@ -11,7 +11,7 @@ describe('ServerStorage', () => {
   beforeEach(() => {
     storage = new ServerStorage('http://localhost:3002');
     fetchMock = vi.fn();
-    global.fetch = fetchMock;
+  (globalThis as { fetch?: typeof fetch }).fetch = fetchMock;
   });
 
   afterEach(() => {
@@ -220,6 +220,49 @@ describe('ServerStorage', () => {
       });
     });
 
+    describe('saveAutosaveSnapshot', () => {
+      it('should upsert autosave snapshot', async () => {
+        fetchMock.mockResolvedValue({
+          ok: true,
+          json: async () => ({ id: 'autosave-123' }),
+        });
+
+        const result = await storage.saveAutosaveSnapshot(
+          'room-1',
+          '{"elements":[]}',
+          'data:image/png;base64,abc',
+          'Autosave 1',
+          'Automatic autosave snapshot'
+        );
+
+        expect(result).toBe('autosave-123');
+        expect(fetchMock).toHaveBeenCalledWith(
+          'http://localhost:3002/api/rooms/room-1/autosave',
+          {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              name: 'Autosave 1',
+              description: 'Automatic autosave snapshot',
+              thumbnail: 'data:image/png;base64,abc',
+              data: '{"elements":[]}',
+            }),
+          }
+        );
+      });
+
+      it('should throw on server error', async () => {
+        fetchMock.mockResolvedValue({
+          ok: false,
+          status: 500,
+        });
+
+        await expect(
+          storage.saveAutosaveSnapshot('room-1', '{"elements":[]}', '')
+        ).rejects.toThrow('Failed to save autosave snapshot to server');
+      });
+    });
+
     describe('listSnapshots', () => {
       it('should list snapshots for a room', async () => {
         const snapshots = [
@@ -375,7 +418,7 @@ describe('ServerStorage', () => {
         expect(result).toEqual({
           room_id: 'room-1',
           max_snapshots: 10,
-          auto_save_interval: 300,
+          auto_save_interval: 60,
         });
       });
     });
@@ -424,6 +467,34 @@ describe('ServerStorage', () => {
           storage.updateRoomSettings('room-1', -1, -100)
         ).rejects.toThrow();
       });
+    });
+  });
+
+  describe('deleteRoom', () => {
+    it('should delete room with confirmation', async () => {
+      fetchMock.mockResolvedValue({
+        ok: true,
+      });
+
+      await storage.deleteRoom('room-1', 'confirm');
+
+      expect(fetchMock).toHaveBeenCalledWith(
+        'http://localhost:3002/api/rooms/room-1',
+        {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ confirmation: 'confirm' }),
+        }
+      );
+    });
+
+    it('should throw detailed error when available', async () => {
+      fetchMock.mockResolvedValue({
+        ok: false,
+        text: async () => 'boom',
+      });
+
+      await expect(storage.deleteRoom('room-1', 'confirm')).rejects.toThrow('boom');
     });
   });
 });
@@ -483,6 +554,7 @@ describe('LocalStorage', () => {
       const result = await storage.loadDrawing('drawing-1');
       expect(result).toEqual(drawing);
     });
+
 
     it('should throw error when drawing not found', async () => {
       (invoke as any).mockRejectedValue(new Error('Drawing not found'));
@@ -604,6 +676,27 @@ describe('LocalStorage', () => {
         description: 'New Desc',
       });
     });
+
+    it('should save autosave snapshot via invoke', async () => {
+      (invoke as any).mockResolvedValue('autosave-local-1');
+
+      const result = await storage.saveAutosaveSnapshot(
+        'room-1',
+        '{"elements":[]}',
+        'data:image/png;base64,123',
+        'Autosave Label',
+        'Automatic autosave snapshot'
+      );
+
+      expect(result).toBe('autosave-local-1');
+      expect(invoke).toHaveBeenCalledWith('save_autosave_snapshot', {
+        roomId: 'room-1',
+        name: 'Autosave Label',
+        description: 'Automatic autosave snapshot',
+        thumbnail: 'data:image/png;base64,123',
+        data: '{"elements":[]}',
+      });
+    });
   });
 
   describe('Room settings', () => {
@@ -611,7 +704,7 @@ describe('LocalStorage', () => {
       const settings = {
         room_id: 'room-1',
         max_snapshots: 10,
-        auto_save_interval: 300,
+        auto_save_interval: 60,
       };
 
       (invoke as any).mockResolvedValue(settings);
@@ -633,6 +726,104 @@ describe('LocalStorage', () => {
         autoSaveInterval: 600,
       });
     });
+  });
+});
+
+describe('loadLatestSnapshotData', () => {
+  const createStorageMock = () => ({
+    listSnapshots: vi.fn(),
+    loadSnapshot: vi.fn(),
+  }) as unknown as LocalStorage;
+
+  it('returns null when no snapshots exist', async () => {
+    const storage = createStorageMock();
+    (storage.listSnapshots as unknown as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+
+    const result = await loadLatestSnapshotData(storage, 'room-1');
+
+    expect(result).toBeNull();
+  });
+
+  it('prefers autosave snapshot when available', async () => {
+    const storage = createStorageMock();
+    (storage.listSnapshots as unknown as ReturnType<typeof vi.fn>).mockResolvedValue([
+      {
+        id: 'manual-1',
+        room_id: 'room-1',
+        name: 'Manual',
+        description: 'Manual snapshot',
+        thumbnail: '',
+        created_by: 'user',
+        created_at: 100,
+      },
+      {
+        id: 'autosave-1',
+        room_id: 'room-1',
+        name: 'Autosave',
+        description: 'Autosave snapshot',
+        thumbnail: '',
+        created_by: AUTOSAVE_CREATED_BY,
+        created_at: 200,
+      },
+    ]);
+    (storage.loadSnapshot as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: 'autosave-1',
+      data: JSON.stringify({ elements: [{ id: 'a' }], appState: { gridSize: 20 } }),
+    });
+
+    const result = await loadLatestSnapshotData(storage, 'room-1');
+
+    expect(result).toEqual({
+      elements: [{ id: 'a' }],
+      appState: { gridSize: 20 },
+    });
+  });
+
+  it('falls back to most recent snapshot when autosave missing', async () => {
+    const storage = createStorageMock();
+    (storage.listSnapshots as unknown as ReturnType<typeof vi.fn>).mockResolvedValue([
+      {
+        id: 'older',
+        room_id: 'room-1',
+        created_by: 'user',
+        created_at: 100,
+      },
+      {
+        id: 'newest',
+        room_id: 'room-1',
+        created_by: 'user',
+        created_at: 300,
+      },
+    ]);
+    (storage.loadSnapshot as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: 'newest',
+      data: JSON.stringify({ elements: [{ id: 'latest' }] }),
+    });
+
+    const result = await loadLatestSnapshotData(storage, 'room-1');
+
+    expect(result).toEqual({
+      elements: [{ id: 'latest' }],
+      appState: {},
+    });
+  });
+
+  it('throws when snapshot data is invalid JSON', async () => {
+    const storage = createStorageMock();
+    (storage.listSnapshots as unknown as ReturnType<typeof vi.fn>).mockResolvedValue([
+      {
+        id: 'broken',
+        room_id: 'room-1',
+        created_by: AUTOSAVE_CREATED_BY,
+        created_at: 100,
+      },
+    ]);
+    (storage.loadSnapshot as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: 'broken',
+      data: 'not-json',
+    });
+
+    await expect(loadLatestSnapshotData(storage, 'room-1')).rejects.toThrow('Failed to parse snapshot data');
   });
 });
 

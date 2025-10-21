@@ -455,8 +455,8 @@ func TestGetRoomSettings_DefaultValues(t *testing.T) {
 	if settings.MaxSnapshots != 10 {
 		t.Errorf("Default MaxSnapshots mismatch: got %d, want 10", settings.MaxSnapshots)
 	}
-	if settings.AutoSaveInterval != 300 {
-		t.Errorf("Default AutoSaveInterval mismatch: got %d, want 300", settings.AutoSaveInterval)
+	if settings.AutoSaveInterval != 60 {
+		t.Errorf("Default AutoSaveInterval mismatch: got %d, want 60", settings.AutoSaveInterval)
 	}
 }
 

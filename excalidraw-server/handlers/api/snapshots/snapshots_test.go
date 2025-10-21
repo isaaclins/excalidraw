@@ -15,6 +15,8 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
+const autosaveCreatedBy = "__autosave__"
+
 // Mock snapshot store for testing
 type mockSnapshotStore struct {
 	mu            sync.RWMutex
@@ -27,6 +29,8 @@ type mockSnapshotStore struct {
 	deleteErr     error
 	updateErr     error
 	settingsErr   error
+	autosaveErr   error
+	deleteRoomErr error
 }
 
 func newMockSnapshotStore() *mockSnapshotStore {
@@ -35,6 +39,14 @@ func newMockSnapshotStore() *mockSnapshotStore {
 		roomSnapshots: make(map[string][]string),
 		roomSettings:  make(map[string]*sqlite.RoomSettings),
 	}
+}
+
+func withChiRouteParams(req *http.Request, params map[string]string) *http.Request {
+	ctx := chi.NewRouteContext()
+	for key, value := range params {
+		ctx.URLParams.Add(key, value)
+	}
+	return req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, ctx))
 }
 
 func (m *mockSnapshotStore) CreateSnapshot(ctx context.Context, roomID, name, description, thumbnail, createdBy string, data []byte) (string, error) {
@@ -134,6 +146,41 @@ func (m *mockSnapshotStore) UpdateSnapshotMetadata(ctx context.Context, id, name
 	return nil
 }
 
+func (m *mockSnapshotStore) UpsertAutosaveSnapshot(ctx context.Context, roomID, name, description, thumbnail string, data []byte) (string, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if m.autosaveErr != nil {
+		return "", m.autosaveErr
+	}
+
+	for id, snapshot := range m.snapshots {
+		if snapshot.RoomID == roomID && snapshot.CreatedBy == autosaveCreatedBy {
+			snapshot.Name = name
+			snapshot.Description = description
+			snapshot.Thumbnail = thumbnail
+			snapshot.Data = data
+			snapshot.CreatedAt = 987654321
+			return id, nil
+		}
+	}
+
+	id := fmt.Sprintf("autosave-%d", len(m.snapshots))
+	snapshot := &sqlite.Snapshot{
+		ID:          id,
+		RoomID:      roomID,
+		Name:        name,
+		Description: description,
+		Thumbnail:   thumbnail,
+		CreatedBy:   autosaveCreatedBy,
+		CreatedAt:   987654321,
+		Data:        data,
+	}
+	m.snapshots[id] = snapshot
+	m.roomSnapshots[roomID] = append(m.roomSnapshots[roomID], id)
+	return id, nil
+}
+
 func (m *mockSnapshotStore) GetRoomSettings(ctx context.Context, roomID string) (*sqlite.RoomSettings, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -147,7 +194,7 @@ func (m *mockSnapshotStore) GetRoomSettings(ctx context.Context, roomID string) 
 		defaultSettings := &sqlite.RoomSettings{
 			RoomID:           roomID,
 			MaxSnapshots:     10,
-			AutoSaveInterval: 300,
+			AutoSaveInterval: 60,
 		}
 		return defaultSettings, nil
 	}
@@ -167,6 +214,25 @@ func (m *mockSnapshotStore) UpdateRoomSettings(ctx context.Context, roomID strin
 		MaxSnapshots:     maxSnapshots,
 		AutoSaveInterval: autoSaveInterval,
 	}
+	return nil
+}
+
+func (m *mockSnapshotStore) DeleteRoom(ctx context.Context, roomID string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if m.deleteRoomErr != nil {
+		return m.deleteRoomErr
+	}
+
+	delete(m.roomSnapshots, roomID)
+	for id, snapshot := range m.snapshots {
+		if snapshot.RoomID == roomID {
+			delete(m.snapshots, id)
+		}
+	}
+	delete(m.roomSettings, roomID)
+
 	return nil
 }
 
@@ -523,8 +589,8 @@ func TestHandleGetRoomSettings_Defaults(t *testing.T) {
 	if settings.MaxSnapshots != 10 {
 		t.Errorf("Default MaxSnapshots mismatch: got %d, want 10", settings.MaxSnapshots)
 	}
-	if settings.AutoSaveInterval != 300 {
-		t.Errorf("Default AutoSaveInterval mismatch: got %d, want 300", settings.AutoSaveInterval)
+	if settings.AutoSaveInterval != 60 {
+		t.Errorf("Default AutoSaveInterval mismatch: got %d, want 60", settings.AutoSaveInterval)
 	}
 }
 
@@ -570,8 +636,8 @@ func TestHandleUpdateRoomSettings_Validation(t *testing.T) {
 	}{
 		{"Zero max snapshots", 0, 500, 10, 500},
 		{"Negative max snapshots", -5, 500, 10, 500},
-		{"Low auto-save interval", 20, 30, 20, 300},
-		{"Both invalid", 0, 30, 10, 300},
+		{"Low auto-save interval", 20, 30, 20, 60},
+		{"Both invalid", 0, 30, 10, 60},
 	}
 
 	for i, tc := range testCases {
@@ -603,6 +669,61 @@ func TestHandleUpdateRoomSettings_Validation(t *testing.T) {
 				t.Errorf("AutoSaveInterval mismatch: got %d, want %d", settings.AutoSaveInterval, tc.expectedAutoSaveInterval)
 			}
 		})
+	}
+}
+
+func TestHandleDeleteRoom_Success(t *testing.T) {
+	store := newMockSnapshotStore()
+	store.snapshots["snap-1"] = &sqlite.Snapshot{ID: "snap-1", RoomID: "room-1"}
+	store.roomSnapshots["room-1"] = []string{"snap-1"}
+	store.roomSettings["room-1"] = &sqlite.RoomSettings{RoomID: "room-1"}
+
+	reqBody := strings.NewReader(`{"confirmation":"confirm"}`)
+	req := httptest.NewRequest(http.MethodDelete, "/api/rooms/room-1", reqBody)
+	req = withChiRouteParams(req, map[string]string{"roomId": "room-1"})
+	rec := httptest.NewRecorder()
+
+	Handler := HandleDeleteRoom(store)
+	Handler(rec, req)
+
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("expected status 204, got %d", rec.Code)
+	}
+
+	if _, exists := store.roomSettings["room-1"]; exists {
+		t.Fatalf("expected room settings to be deleted")
+	}
+	if _, exists := store.roomSnapshots["room-1"]; exists {
+		t.Fatalf("expected room snapshots entry to be deleted")
+	}
+}
+
+func TestHandleDeleteRoom_InvalidConfirmation(t *testing.T) {
+	store := newMockSnapshotStore()
+	reqBody := strings.NewReader(`{"confirmation":"wrong"}`)
+	req := httptest.NewRequest(http.MethodDelete, "/api/rooms/room-1", reqBody)
+	req = withChiRouteParams(req, map[string]string{"roomId": "room-1"})
+	rec := httptest.NewRecorder()
+
+	HandleDeleteRoom(store)(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected status 400, got %d", rec.Code)
+	}
+}
+
+func TestHandleDeleteRoom_StoreError(t *testing.T) {
+	store := newMockSnapshotStore()
+	store.deleteRoomErr = fmt.Errorf("boom")
+	reqBody := strings.NewReader(`{"confirmation":"confirm"}`)
+	req := httptest.NewRequest(http.MethodDelete, "/api/rooms/room-1", reqBody)
+	req = withChiRouteParams(req, map[string]string{"roomId": "room-1"})
+	rec := httptest.NewRecorder()
+
+	HandleDeleteRoom(store)(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("expected status 500, got %d", rec.Code)
 	}
 }
 

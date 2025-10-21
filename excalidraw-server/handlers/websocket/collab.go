@@ -1,6 +1,8 @@
 package websocket
 
 import (
+	"context"
+	"excalidraw-server/core"
 	"fmt"
 	"reflect"
 	"regexp"
@@ -10,6 +12,8 @@ import (
 	"github.com/zishang520/engine.io/v2/types"
 	"github.com/zishang520/engine.io/v2/utils"
 	socketio "github.com/zishang520/socket.io/v2/socket"
+
+	"github.com/sirupsen/logrus"
 )
 
 type ackInvoker func(err error, payload map[string]any)
@@ -44,7 +48,7 @@ func GetActiveRooms() map[string]int {
 	return rooms
 }
 
-func SetupSocketIO() *socketio.Server {
+func SetupSocketIO(registry core.RoomRegistry) *socketio.Server {
 	opts := socketio.DefaultServerOptions()
 	opts.SetMaxHttpBufferSize(5000000)
 	opts.SetPath("/socket.io")
@@ -97,6 +101,12 @@ func SetupSocketIO() *socketio.Server {
 			socket.Join(room)
 			utils.Log().Printf("Socket %v has joined %v\n", me, room)
 
+			if registry != nil {
+				if err := registry.TouchRoom(context.Background(), roomID); err != nil {
+					logrus.WithError(err).WithField("room_id", roomID).Warn("failed to record room activity")
+				}
+			}
+
 			srv.In(room).FetchSockets()(func(users []*socketio.RemoteSocket, fetchErr error) {
 				if fetchErr != nil {
 					respondWithAck(socket, ack, "join-room-ack", map[string]any{
@@ -140,17 +150,17 @@ func SetupSocketIO() *socketio.Server {
 
 		//nolint:errcheck // Socket.IO event handlers do not return useful errors
 		socket.On("server-broadcast", func(datas ...any) {
-			handleBroadcast(socket, datas, false)
+			handleBroadcast(socket, datas, false, registry)
 		})
 
 		//nolint:errcheck // Socket.IO event handlers do not return useful errors
 		socket.On("server-volatile-broadcast", func(datas ...any) {
-			handleBroadcast(socket, datas, true)
+			handleBroadcast(socket, datas, true, registry)
 		})
 
 		//nolint:errcheck // Socket.IO event handlers do not return useful errors
 		socket.On("server-chat-message", func(datas ...any) {
-			handleChatMessage(socket, srv, datas)
+			handleChatMessage(socket, srv, datas, registry)
 		})
 
 		socket.On("user-follow", func(datas ...any) {
@@ -198,7 +208,7 @@ func SetupSocketIO() *socketio.Server {
 	return srv
 }
 
-func handleBroadcast(socket *socketio.Socket, datas []any, volatile bool) {
+func handleBroadcast(socket *socketio.Socket, datas []any, volatile bool, registry core.RoomRegistry) {
 	roomID, payload, metadata, ack := parseBroadcastArgs(datas)
 	if roomID == "" {
 		err := fmt.Errorf("missing room id")
@@ -221,9 +231,15 @@ func handleBroadcast(socket *socketio.Socket, datas []any, volatile bool) {
 	}
 
 	respondWithAck(socket, ack, "broadcast-ack", makeBroadcastAckPayload(payload, nil), nil)
+
+	if registry != nil {
+		if err := registry.TouchRoom(context.Background(), roomID); err != nil {
+			logrus.WithError(err).WithField("room_id", roomID).Warn("failed to record room activity")
+		}
+	}
 }
 
-func handleChatMessage(socket *socketio.Socket, srv *socketio.Server, datas []any) {
+func handleChatMessage(socket *socketio.Socket, srv *socketio.Server, datas []any, registry core.RoomRegistry) {
 	ack, args := extractAck(datas)
 
 	if len(args) < 2 {
@@ -303,6 +319,12 @@ func handleChatMessage(socket *socketio.Socket, srv *socketio.Server, datas []an
 		"status":    "ok",
 		"messageId": messageID,
 	}, nil)
+
+	if registry != nil {
+		if err := registry.TouchRoom(context.Background(), roomID); err != nil {
+			logrus.WithError(err).WithField("room_id", roomID).Warn("failed to record room activity")
+		}
+	}
 }
 
 func extractAck(datas []any) (ack ackInvoker, args []any) {

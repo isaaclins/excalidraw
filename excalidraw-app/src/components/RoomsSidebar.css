@@ -121,6 +121,12 @@
   color: #666;
 }
 
+.room-last-active {
+  font-size: 0.75rem;
+  color: #999;
+  margin-top: 0.35rem;
+}
+
 .rooms-sidebar-footer {
   padding: 1rem 1.5rem;
   border-top: 1px solid #e0e0e0;

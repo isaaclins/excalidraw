@@ -1,8 +1,8 @@
+use once_cell::sync::Lazy;
 use rusqlite::{Connection, Result};
 use serde::{Deserialize, Serialize};
-use std::sync::Mutex;
-use once_cell::sync::Lazy;
 use std::path::PathBuf;
+use std::sync::Mutex;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Drawing {
@@ -43,10 +43,10 @@ fn get_db_path() -> PathBuf {
     let home = std::env::var("HOME")
         .or_else(|_| std::env::var("USERPROFILE"))
         .unwrap_or_else(|_| ".".to_string());
-    
+
     let app_dir = PathBuf::from(home).join(".excalidraw");
     std::fs::create_dir_all(&app_dir).ok();
-    
+
     app_dir.join("drawings.db")
 }
 
@@ -61,7 +61,7 @@ fn init_db(conn: &Connection) -> Result<()> {
         )",
         [],
     )?;
-    
+
     conn.execute(
         "CREATE TABLE IF NOT EXISTS snapshots (
             id TEXT PRIMARY KEY,
@@ -75,15 +75,15 @@ fn init_db(conn: &Connection) -> Result<()> {
         )",
         [],
     )?;
-    
+
     conn.execute(
         "CREATE TABLE IF NOT EXISTS room_settings (
             room_id TEXT PRIMARY KEY,
             max_snapshots INTEGER DEFAULT 10,
-            auto_save_interval INTEGER DEFAULT 300
+            auto_save_interval INTEGER DEFAULT 60
         )",
         [],
     )?;
-    
+
     Ok(())
 }

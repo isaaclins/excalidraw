@@ -1,3 +1,8 @@
+.delete-room-dialog p {
+  margin: 0;
+  color: #555;
+  font-size: 0.95rem;
+}
 .connection-dialog-overlay {
   position: fixed;
   top: 0;
@@ -123,22 +128,16 @@
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
-  max-height: 240px;
-  overflow-y: auto;
-  padding-right: 0.25rem;
 }
 
 .rooms-list-item {
-  display: grid;
-  grid-template-columns: 1fr auto auto;
+  display: flex;
   gap: 0.75rem;
-  align-items: center;
-  padding: 0.75rem;
+  align-items: stretch;
+  padding: 0.5rem;
   border: 1px solid #ddd;
   border-radius: 6px;
   background-color: #fff;
-  cursor: pointer;
-  text-align: left;
   transition: border-color 0.2s, box-shadow 0.2s;
 }
 
@@ -150,6 +149,40 @@
 .rooms-list-item.current {
   border-color: #6965db;
   background-color: rgba(105, 101, 219, 0.08);
+}
+
+.room-join-button {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.6rem 0.75rem;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+}
+
+.room-join-button:hover {
+  background-color: rgba(105, 101, 219, 0.05);
+}
+
+.room-delete-button {
+  align-self: center;
+  padding: 0.45rem 0.8rem;
+  border: 1px solid #f5b1b1;
+  border-radius: 4px;
+  background-color: #ffecec;
+  color: #b20000;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: background-color 0.2s, border-color 0.2s;
+}
+
+.room-delete-button:hover {
+  background-color: #ffd6d6;
+  border-color: #ff9f9f;
 }
 
 .room-name {
@@ -195,7 +228,8 @@
 }
 
 .btn-primary,
-.btn-secondary {
+.btn-secondary,
+.btn-danger {
   padding: 0.75rem 1.5rem;
   border: none;
   border-radius: 4px;
@@ -222,8 +256,18 @@
   background-color: #e0e0e0;
 }
 
+.btn-danger {
+  background-color: #d9534f;
+  color: white;
+}
+
+.btn-danger:hover:not(:disabled) {
+  background-color: #c9302c;
+}
+
 .btn-primary:disabled,
-.btn-secondary:disabled {
+.btn-secondary:disabled,
+.btn-danger:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
@@ -283,5 +327,65 @@
 .room-id-display small {
   color: #666;
   font-size: 0.85rem;
+}
+
+.delete-room-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 11000;
+}
+
+.delete-room-dialog {
+  width: min(420px, 90vw);
+  background: white;
+  border-radius: 8px;
+  padding: 1.75rem;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.2);
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.delete-room-dialog h3 {
+  margin: 0;
+  color: #b20000;
+}
+
+.delete-room-dialog p {
+  margin: 0;
+  color: #555;
+  font-size: 0.95rem;
+}
+
+.delete-room-input {
+  width: 100%;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 0.95rem;
+}
+
+.delete-room-input:focus {
+  outline: none;
+  border-color: #c9302c;
+  box-shadow: 0 0 0 3px rgba(201, 48, 44, 0.2);
+}
+
+.delete-room-error {
+  color: #b20000;
+  font-size: 0.9rem;
+}
+
+.delete-room-actions {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: flex-end;
 }
 
