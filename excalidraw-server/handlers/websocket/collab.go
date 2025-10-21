@@ -127,7 +127,7 @@ func SetupSocketIO() *socketio.Server {
 		})
 
 		socket.On("user-follow", func(datas ...any) {
-			// TODO: Implement user follow functionality
+			handleUserFollow(srv, socket, datas)
 		})
 
 		socket.On("disconnecting", func(datas ...any) {
@@ -353,4 +353,46 @@ func extractMessageID(original any) string {
 	}
 
 	return ""
+}
+
+func handleUserFollow(srv *socketio.Server, socket *socketio.Socket, datas []any) {
+	if len(datas) < 3 {
+		utils.Log().Printf("user-follow: insufficient arguments from %v\n", socket.Id())
+		return
+	}
+
+	roomID, ok := datas[0].(string)
+	if !ok || roomID == "" {
+		utils.Log().Printf("user-follow: invalid room id from %v\n", socket.Id())
+		return
+	}
+
+	targetUserId, ok := datas[1].(string)
+	if !ok || targetUserId == "" {
+		utils.Log().Printf("user-follow: invalid target user id from %v\n", socket.Id())
+		return
+	}
+
+	isFollowing, ok := datas[2].(bool)
+	if !ok {
+		utils.Log().Printf("user-follow: invalid isFollowing flag from %v\n", socket.Id())
+		return
+	}
+
+	followerId := socket.Id()
+	utils.Log().Printf("user-follow: %v %s %v in room %v\n",
+		followerId,
+		map[bool]string{true: "following", false: "unfollowing"}[isFollowing],
+		targetUserId,
+		roomID)
+
+	// Broadcast the follow status to all users in the room
+	room := socketio.Room(roomID)
+	payload := map[string]any{
+		"followerId":  followerId,
+		"targetId":    targetUserId,
+		"isFollowing": isFollowing,
+	}
+
+	_ = srv.In(room).Emit("user-follow-update", payload)
 }

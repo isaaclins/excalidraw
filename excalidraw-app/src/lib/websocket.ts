@@ -83,6 +83,26 @@ export class CollaborationClient {
     this.socket.on('first-in-room', callback);
   }
 
+  // Follow feature methods
+  followUser(targetUserId: string): void {
+    if (!this.socket?.connected || !this.roomId) {
+      return;
+    }
+    this.socket.emit('user-follow', this.roomId, targetUserId, true);
+  }
+
+  unfollowUser(targetUserId: string): void {
+    if (!this.socket?.connected || !this.roomId) {
+      return;
+    }
+    this.socket.emit('user-follow', this.roomId, targetUserId, false);
+  }
+
+  onUserFollow(callback: (data: { followerId: string; targetId: string; isFollowing: boolean }) => void): void {
+    if (!this.socket) return;
+    this.socket.on('user-follow-update', callback);
+  }
+
   disconnect(): void {
     if (this.socket) {
       this.socket.disconnect();

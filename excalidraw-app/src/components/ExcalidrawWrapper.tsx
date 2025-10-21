@@ -5,6 +5,7 @@ import { ExcalidrawAPI, ServerConfig } from '../lib/api';
 import { localStorage as localStorageAPI, ServerStorage, Snapshot } from '../lib/storage';
 import { RoomsSidebar } from './RoomsSidebar';
 import { SnapshotsSidebar } from './SnapshotsSidebar';
+import { FollowersList } from './FollowersList';
 import { AutoSnapshotManager } from '../lib/autoSnapshot';
 import { reconcileElements, BroadcastedExcalidrawElement } from '../lib/reconciliation';
 import '@excalidraw/excalidraw/index.css';
@@ -75,7 +76,12 @@ export function ExcalidrawWrapper({ serverConfig, onOpenSettings, onRoomIdChange
   const [currentDrawingId, setCurrentDrawingId] = useState<string | null>(null);
   const [showRoomsSidebar, setShowRoomsSidebar] = useState(false);
   const [showSnapshotsSidebar, setShowSnapshotsSidebar] = useState(false);
+  const [showFollowersList, setShowFollowersList] = useState(false);
   const [currentRoomId, setCurrentRoomId] = useState<string | null>(initialRoomId);
+  const [followedUserId, setFollowedUserId] = useState<string | null>(null);
+  const [collaboratorsList, setCollaboratorsList] = useState<CollaboratorState[]>([]);
+  const isFollowingViewport = useRef<boolean>(false);
+  const serverConfigKey = useRef<string>('');
   const saveTimeoutRef = useRef<number | undefined>(undefined);
   const lastBroadcastedOrReceivedSceneVersion = useRef<number>(-1);
   const broadcastedElementVersions = useRef<Map<string, number>>(new Map());
@@ -116,6 +122,7 @@ export function ExcalidrawWrapper({ serverConfig, onOpenSettings, onRoomIdChange
     }
 
     const collaborators = new Map<string, Record<string, unknown>>();
+    const collabList: CollaboratorState[] = [];
     collaboratorStates.current.forEach((state: CollaboratorState, id: string) => {
       collaborators.set(id, {
         id,
@@ -124,7 +131,11 @@ export function ExcalidrawWrapper({ serverConfig, onOpenSettings, onRoomIdChange
         pointer: state.pointer,
         pointerButton: state.pointerButton ?? undefined,
       });
+      collabList.push(state);
     });
+
+    // Update the list for FollowersList component
+    setCollaboratorsList(collabList);
 
     const currentAppState = excalidrawRef.current.getAppState();
     const existingCollaborators = currentAppState?.collaborators as Map<string, Record<string, unknown>> | undefined;
@@ -215,6 +226,27 @@ export function ExcalidrawWrapper({ serverConfig, onOpenSettings, onRoomIdChange
       state.pointerButton = payload.pointerButton ?? null;
       collaboratorStates.current.set(userId, state);
 
+      // Sync viewport if following this user
+      if (followedUserId === userId && excalidrawRef.current && isFollowingViewport.current) {
+        const appState = excalidrawRef.current.getAppState();
+        const currentZoom = appState?.zoom?.value ?? 1;
+        const viewportWidth = window.innerWidth;
+        const viewportHeight = window.innerHeight;
+        
+        // Center the viewport on the followed user's cursor
+        const scrollX = -(payload.pointer.x - viewportWidth / (2 * currentZoom));
+        const scrollY = -(payload.pointer.y - viewportHeight / (2 * currentZoom));
+        
+        excalidrawRef.current.updateScene({
+          appState: {
+            ...appState,
+            scrollX,
+            scrollY,
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          } as any,
+        });
+      }
+
       clearCollaboratorTimeout(userId);
       const timeoutId = window.setTimeout(() => {
         const current = collaboratorStates.current.get(userId);
@@ -236,11 +268,58 @@ export function ExcalidrawWrapper({ serverConfig, onOpenSettings, onRoomIdChange
     }
 
     updateCollaboratorsAppState();
-  }, [clearCollaboratorTimeout, getCollaboratorColor, updateCollaboratorsAppState]);
+  }, [clearCollaboratorTimeout, getCollaboratorColor, updateCollaboratorsAppState, followedUserId]);
 
   const generateRoomId = () => {
     return Math.random().toString(36).substring(2, 15);
   };
+
+  const handleFollowUser = useCallback((userId: string | null) => {
+    if (!api || !api.isEnabled()) {
+      return;
+    }
+
+    const collabClient = api.getCollaborationClient();
+    if (!collabClient?.isConnected()) {
+      return;
+    }
+
+    if (userId) {
+      // Start following
+      setFollowedUserId(userId);
+      isFollowingViewport.current = true;
+      collabClient.followUser(userId);
+      
+      // Immediately sync to current position if available
+      const state = collaboratorStates.current.get(userId);
+      if (state?.pointer && excalidrawRef.current) {
+        const appState = excalidrawRef.current.getAppState();
+        const currentZoom = appState?.zoom?.value ?? 1;
+        const viewportWidth = window.innerWidth;
+        const viewportHeight = window.innerHeight;
+        
+        const scrollX = -(state.pointer.x - viewportWidth / (2 * currentZoom));
+        const scrollY = -(state.pointer.y - viewportHeight / (2 * currentZoom));
+        
+        excalidrawRef.current.updateScene({
+          appState: {
+            ...appState,
+            scrollX,
+            scrollY,
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          } as any,
+        });
+      }
+    } else {
+      // Stop following
+      const previousFollowedId = followedUserId;
+      setFollowedUserId(null);
+      isFollowingViewport.current = false;
+      if (previousFollowedId) {
+        collabClient.unfollowUser(previousFollowedId);
+      }
+    }
+  }, [api, followedUserId]);
 
   const broadcastScene = (collab: ReturnType<ExcalidrawAPI['getCollaborationClient']>, allElements: readonly ExcalidrawElement[], syncAll: boolean = false) => {
     if (!collab) return;
@@ -353,6 +432,12 @@ export function ExcalidrawWrapper({ serverConfig, onOpenSettings, onRoomIdChange
         if (!remoteSet.has(userId)) {
           collaboratorStates.current.delete(userId);
           clearCollaboratorTimeout(userId);
+          
+          // Stop following if the followed user disconnected
+          if (followedUserId === userId) {
+            setFollowedUserId(null);
+            isFollowingViewport.current = false;
+          }
         }
       }
 
@@ -381,11 +466,16 @@ export function ExcalidrawWrapper({ serverConfig, onOpenSettings, onRoomIdChange
         broadcastScene(collab, elements, true); // syncAll = true for new users
       }
     });
-  }, [applyRemoteCursorUpdate, clearCollaboratorTimeout, getCollaboratorColor, updateCollaboratorsAppState]);
+  }, [applyRemoteCursorUpdate, clearCollaboratorTimeout, getCollaboratorColor, updateCollaboratorsAppState, followedUserId]);
 
-  // This effect sets up external API and storage instances - legitimate use of setState in effect
-  /* eslint-disable react-hooks/set-state-in-effect */
+  // This effect sets up external API and storage instances
   useEffect(() => {
+    const configKey = `${serverConfig.url}-${serverConfig.enabled}`;
+    if (serverConfigKey.current === configKey && api) {
+      return;
+    }
+    serverConfigKey.current = configKey;
+
     const excalidrawAPI = new ExcalidrawAPI(serverConfig);
     broadcastedElementVersions.current.clear();
     lastBroadcastedOrReceivedSceneVersion.current = -1;
@@ -395,7 +485,18 @@ export function ExcalidrawWrapper({ serverConfig, onOpenSettings, onRoomIdChange
       clearTimeout(pendingBroadcastTimeout.current);
       pendingBroadcastTimeout.current = null;
     }
-    resetCollaboratorsState();
+    // Clear collaborators state
+    collaboratorStates.current.clear();
+    collaboratorColorMap.current.clear();
+    collaboratorCursorTimeouts.current.forEach((timeoutId: number) => {
+      window.clearTimeout(timeoutId);
+    });
+    collaboratorCursorTimeouts.current.clear();
+    lastCursorBroadcastTime.current = 0;
+    lastCursorPayload.current = null;
+    lastCursorButton.current = null;
+    
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setApi(excalidrawAPI);
 
     // Set up snapshot storage based on server config
@@ -441,13 +542,13 @@ export function ExcalidrawWrapper({ serverConfig, onOpenSettings, onRoomIdChange
         pendingBroadcastTimeout.current = null;
       }
       pendingBroadcastVersion.current = null;
-      collaboratorCursorTimeouts.current.forEach((timeoutId: number) => {
+      const timeouts = collaboratorCursorTimeouts.current;
+      timeouts.forEach((timeoutId: number) => {
         window.clearTimeout(timeoutId);
       });
-      collaboratorCursorTimeouts.current.clear();
+      timeouts.clear();
     };
-  }, [serverConfig, initialRoomId, onRoomIdChange, resetCollaboratorsState, setupCollaboration]);
-  /* eslint-enable react-hooks/set-state-in-effect */
+  }, [api, serverConfig, initialRoomId, onRoomIdChange, setupCollaboration]);
 
   // Initialize auto-snapshot manager when room is ready
   useEffect(() => {
@@ -523,6 +624,10 @@ export function ExcalidrawWrapper({ serverConfig, onOpenSettings, onRoomIdChange
 
   const handleJoinRoom = (roomId: string) => {
     if (api && serverConfig.enabled) {
+      // Stop following when changing rooms
+      setFollowedUserId(null);
+      isFollowingViewport.current = false;
+
       // Disconnect from current room
       api.disconnect();
       
@@ -660,11 +765,17 @@ export function ExcalidrawWrapper({ serverConfig, onOpenSettings, onRoomIdChange
       return;
     }
 
+    // Stop following on any user interaction
+    if (isFollowingViewport.current && followedUserId) {
+      setFollowedUserId(null);
+      isFollowingViewport.current = false;
+      collabClient.unfollowUser(followedUserId);
+    }
+
     const pointer = (pointerData?.pointer as { x: number; y: number; pointerType?: string | null } | null | undefined) ?? null;
     const buttonValue = pointerData?.button;
     const pointerButton: PointerButton = buttonValue === 'down' || buttonValue === 'up' ? buttonValue : null;
     const pointerTypeCandidate = pointerData?.pointerType ?? (pointer as { pointerType?: string })?.pointerType;
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
     const eventPointerType = typeof (pointerData as { event?: { pointerType?: string } })?.event?.pointerType === 'string'
       ? (pointerData as { event?: { pointerType?: string } }).event?.pointerType
       : null;
@@ -716,7 +827,7 @@ export function ExcalidrawWrapper({ serverConfig, onOpenSettings, onRoomIdChange
     lastCursorPayload.current = pointerPosition;
     lastCursorButton.current = pointerButton;
     lastCursorBroadcastTime.current = now;
-  }, [api]);
+  }, [api, followedUserId]);
 
   const handleSaveSnapshot = async () => {
     if (!excalidrawRef.current || !currentRoomId) return;
@@ -834,9 +945,14 @@ export function ExcalidrawWrapper({ serverConfig, onOpenSettings, onRoomIdChange
             </MainMenu.Item>
           )}
           {serverConfig.enabled && currentRoomId && (
-            <MainMenu.Item onSelect={() => setShowRoomsSidebar(true)}>
-              🚪 Active Rooms
-            </MainMenu.Item>
+            <>
+              <MainMenu.Item onSelect={() => setShowRoomsSidebar(true)}>
+                🚪 Active Rooms
+              </MainMenu.Item>
+              <MainMenu.Item onSelect={() => setShowFollowersList(true)}>
+                👥 Collaborators
+              </MainMenu.Item>
+            </>
           )}
           <MainMenu.Item onSelect={onOpenSettings}>
             🔌 Server Settings
@@ -848,13 +964,22 @@ export function ExcalidrawWrapper({ serverConfig, onOpenSettings, onRoomIdChange
       </Excalidraw>
       
       {serverConfig.enabled && (
-        <RoomsSidebar
-          serverUrl={serverConfig.url}
-          currentRoomId={currentRoomId}
-          onJoinRoom={handleJoinRoom}
-          isVisible={showRoomsSidebar}
-          onClose={() => setShowRoomsSidebar(false)}
-        />
+        <>
+          <RoomsSidebar
+            serverUrl={serverConfig.url}
+            currentRoomId={currentRoomId}
+            onJoinRoom={handleJoinRoom}
+            isVisible={showRoomsSidebar}
+            onClose={() => setShowRoomsSidebar(false)}
+          />
+          <FollowersList
+            collaborators={collaboratorsList}
+            followedUserId={followedUserId}
+            onFollowUser={handleFollowUser}
+            isVisible={showFollowersList}
+            onClose={() => setShowFollowersList(false)}
+          />
+        </>
       )}
       
       {currentRoomId && (
