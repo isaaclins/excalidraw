@@ -1,0 +1,12 @@
+{
+  "watch": [
+    "app/src-tauri/src",
+    "app/src-tauri/Cargo.toml",
+    "app/src-tauri/tauri.conf.json",
+  "app/src-tauri/capabilities"
+  ],
+  "ext": "rs,json,toml",
+  "delay": "500ms",
+  "signal": "SIGINT",
+  "exec": "npm run --prefix app tauri:dev"
+}

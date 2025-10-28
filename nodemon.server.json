@@ -1,0 +1,13 @@
+{
+  "watch": [
+    "server/src",
+    "server/**/*.ts",
+    "server/**/*.js",
+    "server/**/*.mjs",
+    "server/package.json"
+  ],
+  "ext": "ts,js,json,mjs",
+  "delay": "300ms",
+  "signal": "SIGINT",
+  "exec": "npm run --prefix server dev"
+}

@@ -16,18 +16,21 @@
   "main": "index.js",
   "scripts": {
     "app": "npm run app:dev",
-    "app:dev": "npm run tauri:dev --prefix app",
+  "app:dev": "nodemon --config nodemon.app.json",
     "app:build": "npm run tauri:build --prefix app",
     "app:test": "npm test --prefix app",
     "app:lint": "npm run lint --prefix app",
     "app:lint:fix": "npm run lint --prefix app -- --fix",
     "server": "npm run server:dev",
-    "server:dev": "if [ -f server/package.json ]; then npm run dev --prefix server; else echo \"Server dev script not configured\"; fi",
+  "server:dev": "if [ -f server/package.json ]; then nodemon --config nodemon.server.json; else echo \"Server dev script not configured\"; fi",
     "server:build": "if [ -f server/package.json ]; then npm run build --prefix server; else echo \"Server build script not configured\"; fi",
     "server:test": "if [ -f server/package.json ]; then npm test --prefix server; else echo \"Server tests not configured\"; fi",
     "server:lint": "if [ -f server/package.json ]; then npm run lint --prefix server; else echo \"Server lint skipped\"; fi",
     "server:lint:fix": "if [ -f server/package.json ]; then npm run lint --prefix server -- --fix; else echo \"Server lint skipped\"; fi",
     "lint": "npm run app:lint && npm run server:lint",
     "lint:fix": "npm run app:lint:fix && npm run server:lint:fix"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.10"
   }
 }
