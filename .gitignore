@@ -1,48 +1,21 @@
-# Server
-excalidraw-server/excalidraw-server
-excalidraw-server/*.db
-excalidraw-server/data/
-excalidraw-server/.env
-excalidraw-app/src-tauri/gen
-# App
-excalidraw-app/node_modules/
-excalidraw-app/dist/
-excalidraw-app/dist-ssr/
-excalidraw-app/src-tauri/target/
-excalidraw-app/src-tauri/Cargo.lock
-
-# Logs
-*.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-
-# OS
+node_modules
 .DS_Store
-Thumbs.db
-
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-
-# Build artifacts
-*.exe
-*.dmg
-*.app
-*.deb
-*.rpm
-*.AppImage
-
-# Databases
-*.db
-*.sqlite
-*.sqlite3
-
-# Temporary files
-.cursor/
-tmp/
+dist
+dist-ssr
+*.log
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+*.tmp
 temp/
+app/node_modules
+app/dist
+app/dist-ssr
+app/.vite
+app/.turbo
+app/.tauri
+app/src-tauri/target
+app/src-tauri/gen
+server/node_modules
+server/dist
 
